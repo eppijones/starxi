@@ -61,7 +61,10 @@ const GRAIN = "data:image/svg+xml," + encodeURIComponent(
 function figureSrc(code, gender) {
   const slug = FIG_SLUG[code];
   if (!slug) return null;
-  return `assets/figures/${slug}_${gender === "female" ? "f" : "m"}.png`;
+  // WebP at display resolution (~1500px tall, ~80KB each) — the 4800px source
+  // PNGs were ~7MB apiece, which cratered carousel smoothness because the GPU
+  // was re-uploading 17-megapixel textures on every swap.
+  return `assets/figures-webp/${slug}_${gender === "female" ? "f" : "m"}.webp`;
 }
 
 function Welcome({ state, setState, onNext, onHistory }) {
@@ -156,22 +159,26 @@ function Welcome({ state, setState, onNext, onHistory }) {
   // transform (translate + scale), opacity, filter. The wrapper sits at a fixed
   // size; each role's offset & scale is encoded entirely in `transform`. That's
   // the single biggest perf win — left/bottom/height animations are dropped.
-  const TR = `transform ${DUR}ms ${EASE}, opacity ${DUR}ms ${EASE}, filter ${DUR}ms ${EASE}`;
+  const TR = `transform ${DUR}ms ${EASE}, opacity ${DUR}ms ${EASE}`;
 
-  // Role descriptors: pure transform values. Heights are encoded as scale
-  // factors against the wrapper's native size.
+  // Role descriptors. Horizontal offsets are in vw so the side figures keep a
+  // consistent "% of screen width" from centre on every aspect ratio. Vertical
+  // tweaks are in vh. With transform-origin at bottom-centre, scaling alone
+  // keeps the feet on the same baseline as the centre figure — no dy needed
+  // for the sides. Blur is dropped: it's the single most expensive composited
+  // filter; the smaller scale + opacity already reads as depth.
   const slots = isMobile ? {
-    center: { x: "0%",   y: "0%",   s: 1.00, blur: 0,   op: 1,    z: 20 },
-    left:   { x: "-130%", y: "30%", s: 0.28, blur: 2,   op: 0.55, z: 10 },
-    right:  { x: "130%",  y: "30%", s: 0.28, blur: 2,   op: 0.55, z: 10 },
-    back:   { x: "0%",   y: "30%",  s: 0.20, blur: 5,   op: 0.35, z: 5  },
-    off:    { x: "0%",   y: "30%",  s: 0.16, blur: 6,   op: 0,    z: 1  },
+    center: { dxvw: 0,    dyvh: 0,   s: 1.00, op: 1,    z: 20 },
+    left:   { dxvw: -28,  dyvh: 0,   s: 0.30, op: 0.55, z: 10 },
+    right:  { dxvw:  28,  dyvh: 0,   s: 0.30, op: 0.55, z: 10 },
+    back:   { dxvw: 0,    dyvh: -6,  s: 0.24, op: 0.32, z: 5  },
+    off:    { dxvw: 0,    dyvh: -10, s: 0.18, op: 0,    z: 1  },
   } : {
-    center: { x: "0%",   y: "0%",   s: 1.00, blur: 0,   op: 1,    z: 20 },
-    left:   { x: "-140%", y: "15%", s: 0.38, blur: 2,   op: 0.55, z: 10 },
-    right:  { x: "140%",  y: "15%", s: 0.38, blur: 2,   op: 0.55, z: 10 },
-    back:   { x: "0%",   y: "20%",  s: 0.32, blur: 5,   op: 0.35, z: 5  },
-    off:    { x: "0%",   y: "25%",  s: 0.25, blur: 6,   op: 0,    z: 1  },
+    center: { dxvw: 0,    dyvh: 0,   s: 1.00, op: 1,    z: 20 },
+    left:   { dxvw: -28,  dyvh: 0,   s: 0.40, op: 0.55, z: 10 },
+    right:  { dxvw:  28,  dyvh: 0,   s: 0.40, op: 0.55, z: 10 },
+    back:   { dxvw: 0,    dyvh: -8,  s: 0.34, op: 0.32, z: 5  },
+    off:    { dxvw: 0,    dyvh: -12, s: 0.25, op: 0,    z: 1  },
   };
 
   const slotFor = (i) =>
@@ -189,21 +196,22 @@ function Welcome({ state, setState, onNext, onHistory }) {
     aspectRatio: "0.6667 / 1",
     transformOrigin: "50% 100%",
     transition: TR,
-    willChange: "transform, opacity, filter",
-    // Promote each figure to its own compositor layer so updates never repaint
-    // siblings. translateZ(0) is the canonical browser hint.
     backfaceVisibility: "hidden",
     WebkitBackfaceVisibility: "hidden",
   };
 
   const roleStyle = (i) => {
     const s = slotFor(i);
+    // Only mark the visible-or-incoming items as will-change. Marking all 20
+    // would keep every figure in its own compositor layer permanently, which
+    // is more layer-management overhead than it's worth.
+    const active = s.op > 0;
     return {
       ...baseStyle,
       zIndex: s.z,
       opacity: s.op,
-      filter: s.blur ? `blur(${s.blur}px)` : "none",
-      transform: `translate3d(calc(-50% + ${s.x}), ${s.y}, 0) scale(${s.s})`,
+      transform: `translate3d(calc(-50% + ${s.dxvw}vw), ${s.dyvh}vh, 0) scale(${s.s})`,
+      willChange: active ? "transform, opacity" : "auto",
     };
   };
 
