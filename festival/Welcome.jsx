@@ -96,11 +96,17 @@ function Welcome({ state, setState, onNext, onHistory }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // pre-cache reel images
+  // Pre-decode every reel image so each frame swap is paint-only — `img.decode()`
+  // resolves once the bitmap is GPU-ready, which kills the "jump on first show"
+  // that happens when an <img> first hits the carousel still parsing its PNG.
   useEffect(() => {
-    REEL_CODES.forEach((c) => ["male","female"].forEach((g) => {
+    REEL_CODES.forEach((c) => ["male", "female"].forEach((g) => {
       const src = figureSrc(c, g);
-      if (src) { const im = new Image(); im.src = src; }
+      if (!src) return;
+      const im = new Image();
+      im.decoding = "async";
+      im.src = src;
+      if (im.decode) im.decode().catch(() => {});
     }));
   }, []);
 
@@ -145,25 +151,60 @@ function Welcome({ state, setState, onNext, onHistory }) {
   const right = (activeIndex + 1) % N;
   const back  = (activeIndex + 2) % N;
 
-  const TR = `transform ${DUR}ms ${EASE}, filter ${DUR}ms ${EASE}, opacity ${DUR}ms ${EASE}, left ${DUR}ms ${EASE}, bottom ${DUR}ms ${EASE}, height ${DUR}ms ${EASE}`;
+  // ——— GPU-only transitions ———
+  // We only animate properties the compositor can handle without layout/paint:
+  // transform (translate + scale), opacity, filter. The wrapper sits at a fixed
+  // size; each role's offset & scale is encoded entirely in `transform`. That's
+  // the single biggest perf win — left/bottom/height animations are dropped.
+  const TR = `transform ${DUR}ms ${EASE}, opacity ${DUR}ms ${EASE}, filter ${DUR}ms ${EASE}`;
+
+  // Role descriptors: pure transform values. Heights are encoded as scale
+  // factors against the wrapper's native size.
+  const slots = isMobile ? {
+    center: { x: "0%",   y: "0%",   s: 1.00, blur: 0,   op: 1,    z: 20 },
+    left:   { x: "-130%", y: "30%", s: 0.28, blur: 2,   op: 0.55, z: 10 },
+    right:  { x: "130%",  y: "30%", s: 0.28, blur: 2,   op: 0.55, z: 10 },
+    back:   { x: "0%",   y: "30%",  s: 0.20, blur: 5,   op: 0.35, z: 5  },
+    off:    { x: "0%",   y: "30%",  s: 0.16, blur: 6,   op: 0,    z: 1  },
+  } : {
+    center: { x: "0%",   y: "0%",   s: 1.00, blur: 0,   op: 1,    z: 20 },
+    left:   { x: "-140%", y: "15%", s: 0.38, blur: 2,   op: 0.55, z: 10 },
+    right:  { x: "140%",  y: "15%", s: 0.38, blur: 2,   op: 0.55, z: 10 },
+    back:   { x: "0%",   y: "20%",  s: 0.32, blur: 5,   op: 0.35, z: 5  },
+    off:    { x: "0%",   y: "25%",  s: 0.25, blur: 6,   op: 0,    z: 1  },
+  };
+
+  const slotFor = (i) =>
+    i === center ? slots.center :
+    i === left   ? slots.left   :
+    i === right  ? slots.right  :
+    i === back   ? slots.back   :
+    slots.off;
+
+  const baseStyle = {
+    position: "absolute",
+    left: "50%",
+    bottom: isMobile ? "12%" : "6%",
+    height: isMobile ? "82%" : "94%",
+    aspectRatio: "0.6667 / 1",
+    transformOrigin: "50% 100%",
+    transition: TR,
+    willChange: "transform, opacity, filter",
+    // Promote each figure to its own compositor layer so updates never repaint
+    // siblings. translateZ(0) is the canonical browser hint.
+    backfaceVisibility: "hidden",
+    WebkitBackfaceVisibility: "hidden",
+  };
 
   const roleStyle = (i) => {
-    const base = { position: "absolute", aspectRatio: "0.6667 / 1", transition: TR, willChange: "transform, filter, opacity" };
-    if (i === center) return { ...base,
-      transform: "translateX(-50%) scale(1)", filter: "blur(0px)", opacity: 1, zIndex: 20,
-      left: "50%", height: isMobile ? "78%" : "94%", bottom: isMobile ? "16%" : "8%" };
-    if (i === left) return { ...base,
-      transform: "translateX(-50%) scale(1)", filter: "blur(2px)", opacity: 0.6, zIndex: 10,
-      left: isMobile ? "14%" : "22%", height: isMobile ? "20%" : "36%", bottom: isMobile ? "30%" : "14%" };
-    if (i === right) return { ...base,
-      transform: "translateX(-50%) scale(1)", filter: "blur(2px)", opacity: 0.6, zIndex: 10,
-      left: isMobile ? "86%" : "78%", height: isMobile ? "20%" : "36%", bottom: isMobile ? "30%" : "14%" };
-    if (i === back) return { ...base,
-      transform: "translateX(-50%) scale(1)", filter: "blur(5px)", opacity: 0.4, zIndex: 5,
-      left: "50%", height: isMobile ? "15%" : "30%", bottom: isMobile ? "30%" : "14%" };
-    return { ...base,
-      transform: "translateX(-50%) scale(0.85)", filter: "blur(6px)", opacity: 0, zIndex: 1,
-      left: "50%", height: isMobile ? "14%" : "24%", bottom: isMobile ? "30%" : "14%" };
+    const s = slotFor(i);
+    return {
+      ...baseStyle,
+      zIndex: s.z,
+      opacity: s.op,
+      filter: s.blur ? `blur(${s.blur}px)` : "none",
+      transform: `translate3d(calc(-50% + ${s.x}), ${s.y}, 0) scale(${s.s})`,
+    };
   };
 
   const active = DECK[activeIndex] || DECK[0];
@@ -221,6 +262,10 @@ function Welcome({ state, setState, onNext, onHistory }) {
       fontFamily: "Inter, sans-serif",
       position: "relative", width: "100%", overflow: "hidden",
       height: "100vh", minHeight: 560,
+      // Promote the whole landing to a layer so the bg color transition is
+      // GPU-rasterised instead of triggering full-page repaints.
+      willChange: "background-color",
+      contain: "layout paint",
     }}>
       {/* grain */}
       <div style={{
@@ -287,19 +332,35 @@ function Welcome({ state, setState, onNext, onHistory }) {
         }}>Made by fans, for the fans</span>
       </div>
 
-      {/* carousel */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 3 }}>
+      {/* carousel — every deck item stays mounted so transitions are continuous
+          (changing the React key on the active slot would tear the animation).
+          Off-screen items are opacity 0 + tiny scale, so the compositor draws
+          essentially nothing for them. */}
+      <div style={{
+        position: "absolute", inset: 0, zIndex: 3,
+        contain: "layout paint",
+      }}>
         {DECK.map((it, i) => {
           const src = figureSrc(it.code, it.gender);
           if (!src) return null;
-          const role = i === center ? "c" : "o";
+          const isCenter = i === center;
           return (
             <div key={`${it.code}_${it.gender}_${i}`} style={roleStyle(i)}>
-              <img src={src} draggable="false" alt={it.code}
+              <img
+                src={src}
+                draggable="false"
+                alt={it.code}
+                loading="eager"
+                decoding="async"
+                fetchpriority={isCenter ? "high" : "low"}
                 style={{
-                  width: "100%", height: "100%", objectFit: "contain", objectPosition: "bottom center",
-                  filter: role === "c" ? "drop-shadow(0 30px 40px rgba(0,0,0,0.28))" : "none"
-                }} />
+                  width: "100%", height: "100%",
+                  objectFit: "contain", objectPosition: "bottom center",
+                  filter: isCenter ? "drop-shadow(0 30px 40px rgba(0,0,0,0.28))" : "none",
+                  // Avoid sub-pixel jitter while transforming.
+                  transform: "translateZ(0)",
+                }}
+              />
             </div>
           );
         })}
