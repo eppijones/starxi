@@ -39,18 +39,17 @@ function Confirm({ state, setState, onSubmit, onBack }) {
   }, [picks]);
 
   return (
-    <div className="screen stagger">
-      <div>
-        <div className="eyebrow">Step 4 · Confirm & lock</div>
-        <h2 className="title">Ready to live with these for the summer?</h2>
-        <p className="lede" style={{ marginTop: 4 }}>
-          Quick double-check. When you submit, your entry locks in for the
-          summer — then your points update here every matchday as real
-          results come in.
-        </p>
-      </div>
+    <div className="step-screen">
+      <div className="step-scroll stagger">
+        <div className="dxi-head">
+          <div className="ph-titles">
+            <div className="eyebrow">Step 4 · Confirm & lock</div>
+            <h2 className="title">Lock these in for the summer?</h2>
+            <p className="lede">Quick double-check — when you submit, your entry locks for the summer and your points update here every matchday.</p>
+          </div>
+        </div>
 
-      <div className="confirm-grid" style={{ marginTop: 20 }}>
+      <div className="confirm-grid">
         <div className="card summary-card">
           <h3>Star XI — {formation}</h3>
           <div className="sum-meta">
@@ -119,7 +118,7 @@ function Confirm({ state, setState, onSubmit, onBack }) {
         </div>
       </div>
 
-      <div className="math-card" style={{ marginTop: 18 }}>
+      <div className="math-card">
         <div className="eyebrow">How the table ranks</div>
         <h3>Your Star XI is the spine. Predictions crown the champion.</h3>
         <p>
@@ -148,14 +147,11 @@ function Confirm({ state, setState, onSubmit, onBack }) {
         </div>
       </div>
 
-      <div className="cta-row" style={{ marginTop: 22 }}>
-        <button className="btn ghost" onClick={onBack}>← Back to predictions</button>
-        <button className="btn green" onClick={onSubmit}>
-          ✓ Submit — lock in my picks
-        </button>
-        <span style={{ fontSize: 11, opacity: .6, letterSpacing: ".06em", textTransform: "uppercase", fontWeight: 700 }}>
-          Once you submit, you're in for the summer.
-        </span>
+      </div>
+      <div className="step-foot">
+        <button className="pill ghost sm" onClick={onBack}>← Back</button>
+        <span className="foot-note grow">Once you submit, you're in for the summer.</span>
+        <button className="pill primary" onClick={onSubmit}>✓ Submit — lock in <span>→</span></button>
       </div>
     </div>
   );

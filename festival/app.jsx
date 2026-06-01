@@ -144,13 +144,15 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
 
   if (!state.submitted) {
     return (
-      <div className="screen">
-        <div className="math-card" style={{ textAlign: "center" }}>
-          <div className="eyebrow">Not locked in yet</div>
-          <h3>Submit your entry to go live.</h3>
-          <p>Build your Star XI (predictions optional), then hit <strong>Submit</strong> on the Confirm step. Your live scores appear here once you're in.</p>
-          <div className="cta-row" style={{ marginTop: 18, justifyContent: "center" }}>
-            <button className="btn gold" onClick={onEditPicks}>Finish my picks <span>→</span></button>
+      <div className="step-screen">
+        <div className="step-scroll stagger" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="math-card" style={{ textAlign: "center", maxWidth: 560 }}>
+            <div className="eyebrow">Not locked in yet</div>
+            <h3>Submit your entry to go live.</h3>
+            <p>Build your Star XI (predictions optional), then hit <strong>Submit</strong> on the Confirm step. Your live scores appear here once you're in.</p>
+            <div className="cta-row" style={{ marginTop: 18, justifyContent: "center" }}>
+              <button className="btn gold" onClick={onEditPicks}>Finish my picks <span>→</span></button>
+            </div>
           </div>
         </div>
       </div>
@@ -168,7 +170,8 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
     : null;
 
   return (
-    <div className="screen stagger">
+    <div className="step-screen">
+      <div className="step-scroll stagger">
       {/* Locked-in banner + compact countdown strip */}
       <div className="lockbar">
         <div className="lockbar-head">
@@ -266,13 +269,6 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
             )}
           </div>
 
-          <div className="locked-actions">
-            <button className="btn gold sm" onClick={onLeaderboard}>🏆 Leaderboard</button>
-            <button className="btn ghost sm" onClick={doShare}>{copied ? "✓ Copied!" : "↗ Share"}</button>
-            <button className="btn ghost sm" onClick={onEditPicks}>Edit entry</button>
-            <button className="btn ghost sm" onClick={onHistory}>📖 History</button>
-          </div>
-
           <p className="locked-foot">
             Live daily scoring from real results — plus accounts and mini-leagues — land before kickoff.
             Until then this is your home base: tweak your entry any time before June 11.
@@ -288,6 +284,13 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
         results={liveResults}
         livePred={livePred}
       />
+      </div>
+      <div className="step-foot">
+        <button className="pill ghost sm" onClick={onEditPicks}>← Edit entry</button>
+        <button className="pill ghost sm" onClick={doShare}>{copied ? "✓ Copied!" : "↗ Share"}</button>
+        <span className="grow"></span>
+        <button className="pill primary" onClick={onLeaderboard}>🏆 Leaderboard <span>→</span></button>
+      </div>
     </div>
   );
 }
@@ -507,125 +510,62 @@ function App() {
 
   // The chosen nation's flat colour washes the whole app shell once a nation is
   // locked in — same palette as the welcome carousel, so the brand stays
-  // consistent across steps. Ghost nickname lives ONLY on the landing.
-  const NATION_BG = {
-    MEX: "#1B7A3D", RSA: "#0E7A4A", KOR: "#C8102E", CZE: "#11457E",
-    CAN: "#D32436", BIH: "#1A3A8C", QAT: "#7A1431", SUI: "#D8232A",
-    BRA: "#1E9E4A", MAR: "#B81B2C", HAI: "#10248C", SCO: "#1C2C5E",
-    USA: "#1C2C7A", PAR: "#C8102E", AUS: "#00674A", TUR: "#D11A1A",
-    GER: "#2B2B30", CUW: "#00339A", CIV: "#C25A12", ECU: "#16357E",
-    NED: "#E2620E", JPN: "#11235E", SWE: "#1B58A6", TUN: "#B11118",
-    BEL: "#C8102E", EGY: "#B21320", IRN: "#138047", NZL: "#1B1B20",
-    ESP: "#C60B1E", CPV: "#163E8C", KSA: "#0E6B3B", URU: "#2766A8",
-    FRA: "#1C2C7A", SEN: "#138047", IRQ: "#0C6E3B", NOR: "#BA0C2F",
-    ARG: "#2E7CC2", ALG: "#0B6E3A", AUT: "#C01124", JOR: "#1A6E3F",
-    POR: "#B81B2C", COD: "#1F6FC2", UZB: "#1A53A0", COL: "#16357E",
-    ENG: "#34588C", CRO: "#C21527", GHA: "#15803D", PAN: "#C0142B",
-  };
+  // consistent across steps. The ghost nickname now rides along on every screen.
+  const NATION_BG = window.NATION_BG || {};
+  const NATION_NICK = window.NATION_NICK || {};
   const themed = step !== "welcome" && !!state.nation;
   const nationColor = themed ? (NATION_BG[state.nation] || null) : null;
+  const nationObj = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
+  const ghost = themed
+    ? (NATION_NICK[state.nation] || (nationObj ? nationObj.name.toUpperCase() : null))
+    : null;
 
   return (
     <div
       className={"app" + (themed ? " themed" : "")}
       style={nationColor ? { "--nation": nationColor } : undefined}
     >
-      {step !== "welcome" && (
-      <header className="topbar">
-        <button
-          className="brand"
-          onClick={() => goTo("welcome")}
-          aria-label="STAR XI — home"
-        >
-          <img
-            src="brand/star-xi-chalk.svg"
-            alt=""
-            className="crest-mark"
-            style={{ width: 36, height: 38, display: "block" }}
-          />
-          <div className="brand-stack">
-            <div className="brand-name">STAR XI</div>
-            <div className="brand-sub">World Cup 2026 Edition</div>
-          </div>
-        </button>
-        <div className="topbar-right">
-        <nav className="steps" aria-label="progress">
-          {STEPS.map((s, i) => {
-            const cls = s.id === step ? "active" : i < currentIdx ? "done" : "";
-            return (
-              <button
-                key={s.id}
-                className={"step " + cls}
-                onClick={() => goTo(s.id)}
-                disabled={i > currentIdx && i !== currentIdx + 1 && step !== "history" && step !== "leaderboard"}
-              >
-                <span className="dot"></span>
-                <span className="num">{s.num}</span>
-                <span>{s.label}</span>
-              </button>
-            );
-          })}
-          <button
-            className={"step extra" + (step === "leaderboard" ? " active" : "")}
-            onClick={() => goTo("leaderboard")}
-            title="Leaderboard & mini-leagues"
-          >
-            <span>🏆</span>
-            <span>Table</span>
-          </button>
-          <button
-            className={"step extra" + (step === "history" ? " active" : "")}
-            onClick={() => goTo("history")}
-            title="World Cup history & records"
-          >
-            <span>📖</span>
-            <span>History</span>
-          </button>
-          <button
-            onClick={reset}
-            title="Reset progress"
-            className="reset-btn"
-          >Reset</button>
-        </nav>
-        <AuthControls />
-        </div>
-      </header>
-      )}
-
-      {step === "welcome" && (
+      {step === "welcome" ? (
         <Welcome
           state={state} setState={setState}
           onNext={() => goTo("dreamxi")}
           onHistory={() => goTo("history")}
         />
+      ) : (
+        <StepShell
+          step={step} steps={STEPS} currentIdx={currentIdx}
+          goTo={goTo} reset={reset} ghost={ghost}
+        >
+          {step === "dreamxi" && (
+            <DreamXI state={state} setState={setState}
+              onNext={() => goTo("predict")}
+              onSkip={() => goTo("confirm")}
+              onBack={() => goTo("welcome")} />
+          )}
+          {step === "predict" && (
+            <Predict state={state} setState={setState}
+              onNext={() => goTo("confirm")} onBack={() => goTo("dreamxi")} />
+          )}
+          {step === "confirm" && (
+            <Confirm state={state} setState={setState}
+              onSubmit={submit} onBack={() => goTo("predict")} />
+          )}
+          {step === "live" && (
+            <TournamentLive state={state}
+              onEditPicks={() => goTo("dreamxi")}
+              onLeaderboard={() => goTo("leaderboard")}
+              onHistory={() => goTo("history")} />
+          )}
+          {step === "leaderboard" && (
+            <Leaderboard
+              onEditPicks={() => goTo("dreamxi")}
+              onBack={() => goTo(state.submitted ? "live" : "welcome")} />
+          )}
+          {step === "history" && (
+            <History onBack={() => goTo(state.submitted ? "live" : "welcome")} />
+          )}
+        </StepShell>
       )}
-      {step === "dreamxi" && (
-        <DreamXI state={state} setState={setState}
-          onNext={() => goTo("predict")}
-          onSkip={() => goTo("confirm")}
-          onBack={() => goTo("welcome")} />
-      )}
-      {step === "predict" && (
-        <Predict state={state} setState={setState}
-          onNext={() => goTo("confirm")} onBack={() => goTo("dreamxi")} />
-      )}
-      {step === "confirm" && (
-        <Confirm state={state} setState={setState}
-          onSubmit={submit} onBack={() => goTo("predict")} />
-      )}
-      {step === "live" && (
-        <TournamentLive state={state}
-          onEditPicks={() => goTo("dreamxi")}
-          onLeaderboard={() => goTo("leaderboard")}
-          onHistory={() => goTo("history")} />
-      )}
-      {step === "leaderboard" && (
-        <Leaderboard onEditPicks={() => goTo("dreamxi")} />
-      )}
-      {step === "history" && (
-        <History onBack={() => goTo(currentIdx >= 0 ? STEPS[currentIdx]?.id || "welcome" : "welcome")} />
-      )}
-
     </div>
   );
 }

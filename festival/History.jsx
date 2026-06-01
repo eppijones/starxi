@@ -2,14 +2,14 @@
 
 function History({ onBack }) {
   return (
-    <div className="screen stagger">
-      <div>
-        <div className="eyebrow">Records & history</div>
-        <h2 className="title">Ninety-six years of summer.</h2>
-        <p className="lede" style={{ marginTop: 4 }}>
-          Twenty-two tournaments, eight champions. Here's the canon — and the
-          records your Star XI is chasing this summer.
-        </p>
+    <div className="step-screen">
+      <div className="step-scroll stagger">
+      <div className="dxi-head">
+        <div className="ph-titles">
+          <div className="eyebrow">Records & history</div>
+          <h2 className="title">Ninety-six years of summer.</h2>
+          <p className="lede">Twenty-two tournaments, eight champions. Here's the canon — and the records your Star XI is chasing this summer.</p>
+        </div>
       </div>
 
       {/* Records to watch */}
@@ -106,11 +106,10 @@ function History({ onBack }) {
         ))}
       </div>
 
-      <div className="cta-row" style={{ marginTop: 26 }}>
-        <button className="btn ghost" onClick={onBack}>← Back</button>
-        <span className="disclaimer" style={{ margin: 0 }}>
-          Data from public records. Independent fan project; not affiliated with FIFA.
-        </span>
+      </div>
+      <div className="step-foot">
+        <button className="pill ghost sm" onClick={onBack}>← Back</button>
+        <span className="foot-note grow">Data from public records · independent fan project, not affiliated with FIFA.</span>
       </div>
     </div>
   );

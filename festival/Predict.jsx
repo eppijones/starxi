@@ -78,88 +78,88 @@ function Predict({ state, setState, onNext, onBack }) {
   };
 
   return (
-    <div className="screen stagger">
-      <div className="predict-head">
-        <div>
-          <div className="eyebrow">Step 3 · Optional bonus</div>
-          <h2 className="title">Call the scores</h2>
-          <p className="lede" style={{ marginTop: 4 }}>
-            Optional — skip straight to lock-in if you like. But call the 72
-            group scores and the points stack on top of your XI, putting the
-            ultimate-champion title in reach. Pink card = your nation, doubled.
-          </p>
-        </div>
-        <div className="predict-actions">
-          <div className="view-toggle" role="tablist" aria-label="Layout">
-            <button className={"vt" + (view === "cards" ? " sel" : "")} onClick={() => setView("cards")} aria-pressed={view === "cards"}>▦ Cards</button>
-            <button className={"vt" + (view === "list" ? " sel" : "")} onClick={() => setView("list")} aria-pressed={view === "list"}>≣ List</button>
+    <div className="step-screen">
+      <div className="step-scroll stagger">
+        <div className="predict-head">
+          <div className="ph-titles">
+            <div className="eyebrow">Step 3 · Optional bonus</div>
+            <h2 className="title">Call the scores</h2>
+            <p className="lede">Call the 72 group scores and the points stack on top of your XI. ★ card = your nation, doubled.</p>
           </div>
-          <button className="btn ghost sm" onClick={autofill}>Auto-fill all</button>
-          <button className="btn ghost sm" onClick={clearAll}>Clear</button>
+          <div className="predict-actions">
+            <div className="view-toggle" role="tablist" aria-label="Layout">
+              <button className={"vt" + (view === "cards" ? " sel" : "")} onClick={() => setView("cards")} aria-pressed={view === "cards"}>▦ Cards</button>
+              <button className={"vt" + (view === "list" ? " sel" : "")} onClick={() => setView("list")} aria-pressed={view === "list"}>≣ List</button>
+            </div>
+            <button className="btn ghost sm" onClick={autofill}>Auto-fill all</button>
+            <button className="btn ghost sm" onClick={clearAll}>Clear</button>
+          </div>
         </div>
+
+        <div className="md-bar">
+          <div className="md-tabs" role="tablist" aria-label="Matchday">
+            {mdCounts.map(({ md: n, made, total }) => (
+              <button
+                key={n}
+                role="tab"
+                aria-selected={md === n}
+                className={"md-tab" + (md === n ? " sel" : "")}
+                onClick={() => setMd(n)}
+              >
+                MD{n}
+                <span className="ct">{made}/{total}</span>
+              </button>
+            ))}
+          </div>
+          <button className="btn ghost sm md-fill" onClick={autofillMd}>
+            Fill MD{md} with favourites
+            <span className="md-fill-sub">{mdMade}/24 set</span>
+          </button>
+        </div>
+
+        {view === "cards" ? (
+          <div className="match-grid">
+            {fixtures.map(fx => {
+              const pred = predictions[fx.id] || { home: null, away: null };
+              const boost = nation && (fx.home.code === nation || fx.away.code === nation);
+              return (
+                <MatchPredictCard
+                  key={fx.id}
+                  fx={fx}
+                  pred={pred}
+                  boost={!!boost}
+                  onSet={(side, v) => set(fx.id, side, v)}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <div className="predict-list">
+            {fixtures.map(fx => {
+              const pred = predictions[fx.id] || { home: null, away: null };
+              const boost = nation && (fx.home.code === nation || fx.away.code === nation);
+              return (
+                <MatchPredictRow
+                  key={fx.id}
+                  fx={fx}
+                  pred={pred}
+                  boost={!!boost}
+                  onSet={(side, v) => set(fx.id, side, v)}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <div className="md-bar">
-        <div className="md-tabs" role="tablist" aria-label="Matchday">
-          {mdCounts.map(({ md: n, made, total }) => (
-            <button
-              key={n}
-              role="tab"
-              aria-selected={md === n}
-              className={"md-tab" + (md === n ? " sel" : "")}
-              onClick={() => setMd(n)}
-            >
-              MD{n}
-              <span className="ct">{made}/{total}</span>
-            </button>
-          ))}
+      <div className="step-foot">
+        <button className="pill ghost sm" onClick={onBack}>← Back</button>
+        <div className="foot-meter" title={`${totalMade} of ${totalFix} scores called`}>
+          <div className="fm-bar"><div className="fm-fill" style={{ width: `${pct}%` }}></div></div>
+          <div className="fm-count">{totalMade}<em>/{totalFix}</em> called</div>
         </div>
-        <button className="btn ghost sm md-fill" onClick={autofillMd}>
-          Fill MD{md} with favourites
-          <span className="md-fill-sub">{mdMade}/24 set</span>
-        </button>
-      </div>
-
-      {view === "cards" ? (
-        <div className="match-grid">
-          {fixtures.map(fx => {
-            const pred = predictions[fx.id] || { home: null, away: null };
-            const boost = nation && (fx.home.code === nation || fx.away.code === nation);
-            return (
-              <MatchPredictCard
-                key={fx.id}
-                fx={fx}
-                pred={pred}
-                boost={!!boost}
-                onSet={(side, v) => set(fx.id, side, v)}
-              />
-            );
-          })}
-        </div>
-      ) : (
-        <div className="predict-list">
-          {fixtures.map(fx => {
-            const pred = predictions[fx.id] || { home: null, away: null };
-            const boost = nation && (fx.home.code === nation || fx.away.code === nation);
-            return (
-              <MatchPredictRow
-                key={fx.id}
-                fx={fx}
-                pred={pred}
-                boost={!!boost}
-                onSet={(side, v) => set(fx.id, side, v)}
-              />
-            );
-          })}
-        </div>
-      )}
-
-      <div className="progress-bar">
-        <div className="label">Predictions made</div>
-        <div className="bar"><div className="fill" style={{ width: `${pct}%` }}></div></div>
-        <div className="count">{totalMade}<em>/{totalFix}</em></div>
-        <button className="btn gold sm" onClick={onNext}>
-          Continue · Confirm <span>→</span>
+        <button className="pill primary" onClick={onNext}>
+          Confirm <span>→</span>
         </button>
       </div>
     </div>

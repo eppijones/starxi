@@ -209,7 +209,7 @@ function LbManage({ leagues, onCreated, onJoined, onLeft, onClose }) {
   );
 }
 
-function Leaderboard({ onEditPicks }) {
+function Leaderboard({ onEditPicks, onBack }) {
   const auth = useClerkAuth();
   const [scope, setScope] = useState({ kind: "global", code: null }); // or {kind:"league",code} | {kind:"manage"}
   const [data, setData] = useState(null);
@@ -243,24 +243,37 @@ function Leaderboard({ onEditPicks }) {
   useEffect(() => { loadTable(); }, [loadTable]);
 
   if (!auth.loaded) {
-    return <div className="screen"><div className="empty-state">…</div></div>;
+    return (
+      <div className="step-screen">
+        <div className="step-scroll" style={{ display: "grid", placeItems: "center" }}>
+          <div className="empty-state">…</div>
+        </div>
+      </div>
+    );
   }
 
   if (!auth.signedIn) {
     return (
-      <div className="screen lb-screen">
-        <div className="lb-head">
-          <div className="eyebrow">Leaderboard</div>
-          <h2 className="lb-title">See where you stand</h2>
+      <div className="step-screen">
+        <div className="step-scroll stagger">
+          <div className="lb-screen">
+            <div className="lb-head">
+              <div className="eyebrow">Leaderboard</div>
+              <h2 className="lb-title">See where you stand</h2>
+            </div>
+            <div className="lb-soft">
+              <div className="lb-soft-emoji">🔐</div>
+              <h3>Sign in to see the table</h3>
+              <p>
+                The global leaderboard and your private mini-leagues live with your
+                account, so they follow you across devices. Sign in to view your rank.
+              </p>
+              <button className="btn gold" onClick={() => window.clerkOpenSignIn()}>Sign in</button>
+            </div>
+          </div>
         </div>
-        <div className="lb-soft">
-          <div className="lb-soft-emoji">🔐</div>
-          <h3>Sign in to see the table</h3>
-          <p>
-            The global leaderboard and your private mini-leagues live with your
-            account, so they follow you across devices. Sign in to view your rank.
-          </p>
-          <button className="btn gold" onClick={() => window.clerkOpenSignIn()}>Sign in</button>
+        <div className="step-foot">
+          <button className="pill ghost sm" onClick={onBack}>← Back to my entry</button>
         </div>
       </div>
     );
@@ -273,50 +286,59 @@ function Leaderboard({ onEditPicks }) {
   };
 
   return (
-    <div className="screen lb-screen">
-      <div className="lb-head">
-        <div className="eyebrow">Leaderboard</div>
-        <h2 className="lb-title">
-          {scope.kind === "manage"
-            ? "Mini-leagues"
-            : scope.kind === "league" && data && data.name
-              ? data.name
-              : "Global table"}
-        </h2>
-      </div>
+    <div className="step-screen">
+      <div className="step-scroll stagger">
+        <div className="lb-screen">
+          <div className="lb-head">
+            <div className="eyebrow">Leaderboard</div>
+            <h2 className="lb-title">
+              {scope.kind === "manage"
+                ? "Mini-leagues"
+                : scope.kind === "league" && data && data.name
+                  ? data.name
+                  : "Global table"}
+            </h2>
+          </div>
 
-      <div className="lb-scopes">
-        <button
-          className={"lb-scope" + (scope.kind === "global" ? " sel" : "")}
-          onClick={() => setScope({ kind: "global", code: null })}
-        >🌍 Global</button>
-        {leagues.map((l) => (
-          <button
-            key={l.code}
-            className={"lb-scope" + (scope.kind === "league" && scope.code === l.code ? " sel" : "")}
-            onClick={() => setScope({ kind: "league", code: l.code })}
-            title={`${l.memberCount} members`}
-          >
-            {l.name}<small>{l.memberCount}</small>
-          </button>
-        ))}
-        <button
-          className={"lb-scope add" + (scope.kind === "manage" ? " sel" : "")}
-          onClick={goManage}
-        >＋ League</button>
-      </div>
+          <div className="lb-scopes">
+            <button
+              className={"lb-scope" + (scope.kind === "global" ? " sel" : "")}
+              onClick={() => setScope({ kind: "global", code: null })}
+            >🌍 Global</button>
+            {leagues.map((l) => (
+              <button
+                key={l.code}
+                className={"lb-scope" + (scope.kind === "league" && scope.code === l.code ? " sel" : "")}
+                onClick={() => setScope({ kind: "league", code: l.code })}
+                title={`${l.memberCount} members`}
+              >
+                {l.name}<small>{l.memberCount}</small>
+              </button>
+            ))}
+            <button
+              className={"lb-scope add" + (scope.kind === "manage" ? " sel" : "")}
+              onClick={goManage}
+            >＋ League</button>
+          </div>
 
-      {scope.kind === "manage" ? (
-        <LbManage
-          leagues={leagues}
-          onCreated={(code) => afterLeagueChange(code, true)}
-          onJoined={(code) => afterLeagueChange(code, true)}
-          onLeft={(code) => afterLeagueChange(code, false)}
-          onClose={() => setScope({ kind: "global", code: null })}
-        />
-      ) : (
-        <LbTable data={data} loading={loading} onRefresh={loadTable} />
-      )}
+          {scope.kind === "manage" ? (
+            <LbManage
+              leagues={leagues}
+              onCreated={(code) => afterLeagueChange(code, true)}
+              onJoined={(code) => afterLeagueChange(code, true)}
+              onLeft={(code) => afterLeagueChange(code, false)}
+              onClose={() => setScope({ kind: "global", code: null })}
+            />
+          ) : (
+            <LbTable data={data} loading={loading} onRefresh={loadTable} />
+          )}
+        </div>
+      </div>
+      <div className="step-foot">
+        <button className="pill ghost sm" onClick={onBack}>← Back to my entry</button>
+        <span className="grow"></span>
+        <button className="pill ghost sm" onClick={onEditPicks}>Edit my entry</button>
+      </div>
     </div>
   );
 }

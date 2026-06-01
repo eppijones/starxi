@@ -169,24 +169,21 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
   };
 
   return (
-    <div className="screen stagger">
-      <div className="dxi-head">
-        <div>
-          <div className="eyebrow">Step 2 · The main event</div>
-          <h2 className="title">Draft your Star XI</h2>
-          <p className="lede" style={{ marginTop: 4 }}>
-            This is the game. A full eleven, ranked on the global table all
-            summer. Pick a formation, captain a player to double their points,
-            and you're in — score predictions are an optional bonus on top.
-          </p>
+    <div className="step-screen">
+      <div className="step-scroll stagger">
+        <div className="dxi-head">
+          <div className="ph-titles">
+            <div className="eyebrow">Step 2 · The main event</div>
+            <h2 className="title">Draft your Star XI</h2>
+            <p className="lede">A full eleven, ranked all summer. Pick a formation, captain a player for ×2 — predictions are an optional bonus.</p>
+          </div>
+          <div className="dxi-actions">
+            <button className="btn ghost sm" onClick={autoFillXI}>Auto-fill XI</button>
+            <button className="btn ghost sm" onClick={clearXI}>Clear</button>
+          </div>
         </div>
-        <div className="dxi-actions">
-          <button className="btn ghost sm" onClick={autoFillXI}>Auto-fill XI</button>
-          <button className="btn ghost sm" onClick={clearXI}>Clear</button>
-        </div>
-      </div>
 
-      <div className="dxi-layout">
+        <div className="dxi-layout">
         {/* LEFT: position filter + player list */}
         <div>
           <div className="dxi-controls">
@@ -385,38 +382,24 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
             ⓘ Squads provisional. Official 26-man rosters drop early June 2026 —
             you'll get one free swap window before kickoff to lock in your XI.
           </div>
-
-          {picks.length < 11 ? (
-            <button
-              className="btn gold sm"
-              disabled
-              style={{ width: "100%", justifyContent: "center", marginTop: 14 }}
-            >
-              Pick {totalLeft} more
-            </button>
-          ) : (
-            <div className="dxi-finish">
-              <button
-                className="btn gold sm"
-                onClick={onSkip}
-                style={{ width: "100%", justifyContent: "center" }}
-              >
-                Review &amp; lock in →
-              </button>
-              <button
-                className="btn ghost sm"
-                onClick={onNext}
-                style={{ width: "100%", justifyContent: "center" }}
-              >
-                + Add score predictions <span className="dxi-opt">optional</span>
-              </button>
-              <p className="dxi-finish-note">
-                Your XI is what the global table ranks on. Nail the group scores
-                too and you're in the running for <strong>ultimate champion</strong>.
-              </p>
-            </div>
-          )}
         </aside>
+      </div>
+      </div>
+
+      <div className="step-foot">
+        <button className="pill ghost sm" onClick={onBack}>← Back</button>
+        <div className="foot-meter" title={`${picks.length} of 11 picked`}>
+          <div className="fm-bar"><div className="fm-fill" style={{ width: `${(picks.length / 11) * 100}%` }}></div></div>
+          <div className="fm-count">{picks.length}<em>/11</em> picked</div>
+        </div>
+        {picks.length < 11 ? (
+          <button className="pill primary" disabled>Pick {totalLeft} more</button>
+        ) : (
+          <>
+            <button className="pill ghost" onClick={onNext}>+ Predictions</button>
+            <button className="pill primary" onClick={onSkip}>Review &amp; lock in <span>→</span></button>
+          </>
+        )}
       </div>
     </div>
   );
