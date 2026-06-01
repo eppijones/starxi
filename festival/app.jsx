@@ -626,39 +626,6 @@ function App() {
         <History onBack={() => goTo(currentIdx >= 0 ? STEPS[currentIdx]?.id || "welcome" : "welcome")} />
       )}
 
-      {step !== "welcome" && (
-      <footer className="site-footer">
-        <div className="footer-cols">
-          <div>
-            <strong className="ft-strong">STAR XI</strong>
-            <p>STAR XI — a fan-made prediction + squad game for the summer of '26.</p>
-          </div>
-          <div>
-            <strong className="ft-strong">Not affiliated with FIFA</strong>
-            <p>
-              Independent project. <em>Not</em> affiliated with, endorsed by,
-              sponsored by, licensed by, or in any way officially connected
-              with FIFA, the host federations or any tournament organiser.
-              All trademarks, marks, names, logos and emblems are the property
-              of their respective owners.
-            </p>
-          </div>
-          <div>
-            <strong className="ft-strong">Official tournament</strong>
-            <p>
-              For tickets, broadcasts, official squads, official mascots and
-              official everything else:{" "}
-              <a href="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026"
-                 target="_blank" rel="noopener noreferrer">fifa.com →</a>
-            </p>
-          </div>
-        </div>
-        <div className="footer-base">
-          Built by fans, for fans · No real-money prizes · No ticket reselling ·
-          Squad data provisional until 1 June 2026 · "World Cup™" is a trademark of FIFA, used here only as a factual descriptor — this is an independent fan project, not affiliated with FIFA.
-        </div>
-      </footer>
-      )}
     </div>
   );
 }
