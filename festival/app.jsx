@@ -507,6 +507,7 @@ function App() {
 
   return (
     <div className="app">
+      {step !== "welcome" && (
       <header className="topbar">
         <button
           className="brand"
@@ -566,6 +567,7 @@ function App() {
         <AuthControls />
         </div>
       </header>
+      )}
 
       {step === "welcome" && (
         <Welcome

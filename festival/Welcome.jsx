@@ -147,19 +147,19 @@ function Welcome({ state, setState, onNext, onHistory }) {
     const base = { position: "absolute", aspectRatio: "0.6667 / 1", transition: TR, willChange: "transform, filter, opacity" };
     if (i === center) return { ...base,
       transform: "translateX(-50%) scale(1)", filter: "blur(0px)", opacity: 1, zIndex: 20,
-      left: "50%", height: isMobile ? "62%" : "84%", bottom: isMobile ? "16%" : "6%" };
+      left: "50%", height: isMobile ? "74%" : "100%", bottom: isMobile ? "11%" : "0%" };
     if (i === left) return { ...base,
       transform: "translateX(-50%) scale(1)", filter: "blur(2px)", opacity: 0.6, zIndex: 10,
-      left: isMobile ? "14%" : "22%", height: isMobile ? "20%" : "32%", bottom: isMobile ? "30%" : "8%" };
+      left: isMobile ? "14%" : "22%", height: isMobile ? "20%" : "36%", bottom: isMobile ? "30%" : "6%" };
     if (i === right) return { ...base,
       transform: "translateX(-50%) scale(1)", filter: "blur(2px)", opacity: 0.6, zIndex: 10,
-      left: isMobile ? "86%" : "78%", height: isMobile ? "20%" : "32%", bottom: isMobile ? "30%" : "8%" };
+      left: isMobile ? "86%" : "78%", height: isMobile ? "20%" : "36%", bottom: isMobile ? "30%" : "6%" };
     if (i === back) return { ...base,
       transform: "translateX(-50%) scale(1)", filter: "blur(5px)", opacity: 0.4, zIndex: 5,
-      left: "50%", height: isMobile ? "15%" : "26%", bottom: isMobile ? "30%" : "8%" };
+      left: "50%", height: isMobile ? "15%" : "30%", bottom: isMobile ? "30%" : "6%" };
     return { ...base,
       transform: "translateX(-50%) scale(0.85)", filter: "blur(6px)", opacity: 0, zIndex: 1,
-      left: "50%", height: isMobile ? "14%" : "22%", bottom: isMobile ? "30%" : "8%" };
+      left: "50%", height: isMobile ? "14%" : "24%", bottom: isMobile ? "30%" : "6%" };
   };
 
   const active = DECK[activeIndex] || DECK[0];
@@ -181,7 +181,7 @@ function Welcome({ state, setState, onNext, onHistory }) {
       const w = ctx.measureText(ghost).width || 1;
       const target = window.innerWidth * 0.92;
       let size = 100 * target / w;
-      size = Math.min(size, window.innerHeight * 0.42, 280);
+      size = Math.min(size, window.innerHeight * 0.46, 300);
       size = Math.max(size, 40);
       setGhostSize(size);
     };
@@ -215,7 +215,7 @@ function Welcome({ state, setState, onNext, onHistory }) {
       transition: `background-color ${DUR}ms ${EASE}`,
       fontFamily: "Inter, sans-serif",
       position: "relative", width: "100%", overflow: "hidden",
-      height: "calc(100vh - 64px)", minHeight: 560,
+      height: "100vh", minHeight: 560,
     }}>
       {/* grain */}
       <div style={{
@@ -235,9 +235,41 @@ function Welcome({ state, setState, onNext, onHistory }) {
         }}>{ghost}</span>
       </div>
 
+      {/* brand — top center */}
+      <div style={{
+        position: "absolute", top: 18, left: "50%", transform: "translateX(-50%)",
+        display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
+        zIndex: 60
+      }}>
+        <svg width="42" viewBox="0 0 200 210" fill="none" style={{ marginBottom: 7, filter: "drop-shadow(0 2px 14px rgba(0,0,0,0.42))" }}>
+          <path d="M48,24 L152,24 Q166,24 166,48 Q166,110 146,148 Q126,184 100,196 Q74,184 54,148 Q34,110 34,48 Q34,24 48,24 Z"
+                stroke="#fff" strokeWidth="7" strokeLinejoin="round" />
+          <g transform="translate(100,110) scale(0.9) translate(-100,-110)">
+            <path d="M48,24 L152,24 Q166,24 166,48 Q166,110 146,148 Q126,184 100,196 Q74,184 54,148 Q34,110 34,48 Q34,24 48,24 Z"
+                  stroke="#fff" strokeWidth="3" fill="none" />
+          </g>
+          <polygon points="100,37 103.41,47.31 114.27,47.36 105.52,53.79 108.82,64.14 100,57.8 91.18,64.14 94.48,53.79 85.73,47.36 96.59,47.31" fill="#fff" />
+          <g fill="#fff">
+            <polygon points="55,80 75,80 117,148 97,148" />
+            <polygon points="97,80 117,80 75,148 55,148" />
+            <polygon points="125,80 145,80 145,148 125,148" />
+          </g>
+        </svg>
+        <div style={{
+          fontFamily: "Anton, sans-serif", fontSize: "clamp(24px,3vw,36px)",
+          color: "#fff", letterSpacing: "0.05em", lineHeight: 1,
+          textShadow: "0 2px 22px rgba(0,0,0,0.38)"
+        }}>STAR XI</div>
+        <div style={{
+          color: "#fff", opacity: 0.78, letterSpacing: "0.26em", marginTop: 6,
+          textShadow: "0 2px 16px rgba(0,0,0,0.4)",
+          fontSize: 11, fontWeight: 600, textTransform: "uppercase"
+        }}>World Cup 2026 Edition</div>
+      </div>
+
       {/* fan tagline — top right */}
       <div style={{
-        position: "absolute", top: 18, right: 16, display: "flex", alignItems: "center",
+        position: "absolute", top: 28, right: 16, display: "flex", alignItems: "center",
         gap: 8, zIndex: 60
       }}>
         <span style={{
