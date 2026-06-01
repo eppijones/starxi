@@ -71,6 +71,7 @@ body {
     radial-gradient(1100px 640px at 8% 4%, rgba(3,184,174,.10), transparent 58%),
     var(--paper);
   position: relative;
+  transition: background-color .6s cubic-bezier(.4,0,.2,1);
 }
 .app::before {
   /* faint confetti speckle behind everything */
@@ -84,6 +85,29 @@ body {
   pointer-events: none;
   z-index: 0;
 }
+/* Once a nation is locked, the whole app shell becomes that nation's flat
+   colour — same palette as the welcome carousel, plus a soft vignette so
+   pure-white type stays legible. The festival confetti speckle is hidden so
+   the nation field reads clean. */
+.app.themed {
+  background-color: var(--nation, #15161B);
+  background-image:
+    radial-gradient(135% 90% at 50% -20%, rgba(255,255,255,.14) 0%, transparent 52%),
+    linear-gradient(180deg, rgba(0,0,0,0) 38%, rgba(0,0,0,.34) 100%);
+  color: #fff;
+}
+.app.themed::before { display: none; }
+/* themed topbar: translucent dark glass over the nation field, white type */
+.app.themed .topbar {
+  background: rgba(13,14,19,0.55);
+  border-bottom: 1px solid rgba(255,255,255,0.16);
+  color: #fff;
+}
+.app.themed .topbar .brand,
+.app.themed .topbar .brand-name { color: #fff; }
+.app.themed .topbar .brand-sub { color: #fff; opacity: .7; }
+.app.themed .topbar .brand:hover { background: rgba(255,255,255,.08); }
+.app.themed .topbar .crest-mark { filter: brightness(0) invert(1); }
 
 /* helper: festival sunburst (used behind heroes) */
 .sunburst {

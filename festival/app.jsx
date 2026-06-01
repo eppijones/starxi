@@ -505,8 +505,31 @@ function App() {
 
   const currentIdx = STEPS.findIndex(s => s.id === step);
 
+  // The chosen nation's flat colour washes the whole app shell once a nation is
+  // locked in — same palette as the welcome carousel, so the brand stays
+  // consistent across steps. Ghost nickname lives ONLY on the landing.
+  const NATION_BG = {
+    MEX: "#1B7A3D", RSA: "#0E7A4A", KOR: "#C8102E", CZE: "#11457E",
+    CAN: "#D32436", BIH: "#1A3A8C", QAT: "#7A1431", SUI: "#D8232A",
+    BRA: "#1E9E4A", MAR: "#B81B2C", HAI: "#10248C", SCO: "#1C2C5E",
+    USA: "#1C2C7A", PAR: "#C8102E", AUS: "#00674A", TUR: "#D11A1A",
+    GER: "#2B2B30", CUW: "#00339A", CIV: "#C25A12", ECU: "#16357E",
+    NED: "#E2620E", JPN: "#11235E", SWE: "#1B58A6", TUN: "#B11118",
+    BEL: "#C8102E", EGY: "#B21320", IRN: "#138047", NZL: "#1B1B20",
+    ESP: "#C60B1E", CPV: "#163E8C", KSA: "#0E6B3B", URU: "#2766A8",
+    FRA: "#1C2C7A", SEN: "#138047", IRQ: "#0C6E3B", NOR: "#BA0C2F",
+    ARG: "#2E7CC2", ALG: "#0B6E3A", AUT: "#C01124", JOR: "#1A6E3F",
+    POR: "#B81B2C", COD: "#1F6FC2", UZB: "#1A53A0", COL: "#16357E",
+    ENG: "#34588C", CRO: "#C21527", GHA: "#15803D", PAN: "#C0142B",
+  };
+  const themed = step !== "welcome" && !!state.nation;
+  const nationColor = themed ? (NATION_BG[state.nation] || null) : null;
+
   return (
-    <div className="app">
+    <div
+      className={"app" + (themed ? " themed" : "")}
+      style={nationColor ? { "--nation": nationColor } : undefined}
+    >
       {step !== "welcome" && (
       <header className="topbar">
         <button
