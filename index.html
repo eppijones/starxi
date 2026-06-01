@@ -3,16 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WORLD CUP XI (WCXI) — fan-made prediction & squad game</title>
-  <meta name="description" content="WORLD CUP XI — an independent, fan-made prediction + Dream XI squad game for the summer of '26. Not affiliated with, endorsed by, or licensed by FIFA." />
+  <title>STAR XI — World Cup 2026 · pick your nation, draft your XI</title>
+  <meta name="description" content="STAR XI — an independent, fan-made prediction + Star XI squad game for the summer of '26. Pick your nation, draft your XI, call every score. Not affiliated with, endorsed by, or licensed by FIFA." />
+
+  <link rel="icon" type="image/svg+xml" href="brand/star-xi-mark.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="brand/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="brand/favicon-16.png" />
+  <link rel="apple-touch-icon" href="brand/apple-touch-icon.png" />
+  <meta name="theme-color" content="#0B7A3E" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Anton&family=Hanken+Grotesk:wght@400;500;600;700;800;900&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&family=Hanken+Grotesk:wght@400;500;600;700;800;900&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="festival/styles.css?v=20260530l" />
+  <link rel="stylesheet" href="festival/styles.css?v=20260601a" />
 
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
@@ -54,29 +60,29 @@
   <!-- Data first (plain JS, sets globals) -->
   <!-- ?v= cache-bust: no build step, so bump this token on every deploy
        to force returning visitors past the browser's heuristic cache. -->
-  <script src="festival/data.js?v=20260530l"></script>
+  <script src="festival/data.js?v=20260601a"></script>
   <!-- Shared live-results mapper (plain JS): one payload->fixtures impl for
        browser + /api leaderboard. Must load before live-data.js. -->
-  <script src="festival/results-map.js?v=20260530l"></script>
+  <script src="festival/results-map.js?v=20260601a"></script>
   <!-- Live results glue (plain JS): maps /api/results onto our fixtures -->
-  <script src="festival/live-data.js?v=20260530l"></script>
+  <script src="festival/live-data.js?v=20260601a"></script>
   <!-- Entry persistence glue (plain JS): save/load entries via /api/entry -->
-  <script src="festival/api.js?v=20260530l"></script>
+  <script src="festival/api.js?v=20260601a"></script>
   <!-- Shared scoring core (plain JS): one scoring impl for browser + /api -->
-  <script src="festival/scoring-core.js?v=20260530l"></script>
+  <script src="festival/scoring-core.js?v=20260601a"></script>
 
   <!-- Helpers, extras, then per-screen, then app -->
-  <script type="text/babel" src="festival/helpers.jsx?v=20260530l"></script>
-  <script type="text/babel" src="festival/extras.jsx?v=20260530l"></script>
+  <script type="text/babel" src="festival/helpers.jsx?v=20260601a"></script>
+  <script type="text/babel" src="festival/extras.jsx?v=20260601a"></script>
   <!-- Clerk React surface (hook + nav controls). After helpers (hooks), before app. -->
-  <script type="text/babel" src="festival/auth.jsx?v=20260530l"></script>
-  <script type="text/babel" src="festival/Welcome.jsx?v=20260530l"></script>
-  <script type="text/babel" src="festival/Predict.jsx?v=20260530l"></script>
-  <script type="text/babel" src="festival/DreamXI.jsx?v=20260530l"></script>
-  <script type="text/babel" src="festival/Confirm.jsx?v=20260530l"></script>
-  <script type="text/babel" src="festival/Live.jsx?v=20260530l"></script>
-  <script type="text/babel" src="festival/History.jsx?v=20260530l"></script>
-  <script type="text/babel" src="festival/Leaderboard.jsx?v=20260530l"></script>
-  <script type="text/babel" src="festival/app.jsx?v=20260530l"></script>
+  <script type="text/babel" src="festival/auth.jsx?v=20260601a"></script>
+  <script type="text/babel" src="festival/Welcome.jsx?v=20260601a"></script>
+  <script type="text/babel" src="festival/Predict.jsx?v=20260601a"></script>
+  <script type="text/babel" src="festival/DreamXI.jsx?v=20260601a"></script>
+  <script type="text/babel" src="festival/Confirm.jsx?v=20260601a"></script>
+  <script type="text/babel" src="festival/Live.jsx?v=20260601a"></script>
+  <script type="text/babel" src="festival/History.jsx?v=20260601a"></script>
+  <script type="text/babel" src="festival/Leaderboard.jsx?v=20260601a"></script>
+  <script type="text/babel" src="festival/app.jsx?v=20260601a"></script>
 </body>
 </html>

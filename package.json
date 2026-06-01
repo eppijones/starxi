@@ -1,8 +1,8 @@
 {
   "private": true,
-  "name": "worldcupxi",
+  "name": "starxi",
   "version": "1.0.0",
-  "description": "WORLD CUP XI — serverless API (entries, leaderboards). The site itself is buildless static; this package.json exists only to give the /api functions their dependencies.",
+  "description": "STAR XI — serverless API (entries, leaderboards). The site itself is buildless static; this package.json exists only to give the /api functions their dependencies.",
   "dependencies": {
     "@clerk/backend": "^3.4.14"
   }

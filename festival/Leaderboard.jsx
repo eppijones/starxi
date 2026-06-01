@@ -16,7 +16,7 @@ function LbRow({ row }) {
   const bits = [];
   if (row.predictionPts) bits.push(`+${row.predictionPts} predictions`);
   if (row.bullseyes) bits.push(`${row.bullseyes} exact`);
-  const sub = bits.join(" · ") || "Dream XI only";
+  const sub = bits.join(" · ") || "Star XI only";
   // Ultimate champion — leads the table on the strength of BOTH layers.
   const ultimate = row.rank === 1 && row.xiPts > 0 && row.predictionPts > 0;
   return (
@@ -105,7 +105,7 @@ function LbTable({ data, loading, onRefresh }) {
       )}
 
       <p className="lb-legend">
-        Ranked on <strong>Dream XI points</strong>. Score predictions are a bonus
+        Ranked on <strong>Star XI points</strong>. Score predictions are a bonus
         that breaks ties — top both and you're the <strong>ultimate champion</strong> 👑.
       </p>
     </div>

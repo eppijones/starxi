@@ -8,7 +8,7 @@ function History({ onBack }) {
         <h2 className="title">Ninety-six years of summer.</h2>
         <p className="lede" style={{ marginTop: 4 }}>
           Twenty-two tournaments, eight champions. Here's the canon — and the
-          records your Dream XI is chasing this summer.
+          records your Star XI is chasing this summer.
         </p>
       </div>
 

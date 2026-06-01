@@ -1,4 +1,4 @@
-// DREAM XI '26 — Screen 3: Dream XI (11-player squad with pitch visualization)
+// STAR XI '26 — Screen 3: Star XI (11-player squad with pitch visualization)
 
 const POS_LABELS = { ALL: "All", GK: "GK", DF: "DF", MF: "MF", FW: "FW" };
 
@@ -164,7 +164,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
   };
 
   const clearXI = () => {
-    if (!confirm("Clear your Dream XI?")) return;
+    if (!confirm("Clear your Star XI?")) return;
     setState(s => ({ ...s, picks: [], captain: null, captainByMd: {} }));
   };
 
@@ -173,7 +173,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
       <div className="dxi-head">
         <div>
           <div className="eyebrow">Step 2 · The main event</div>
-          <h2 className="title">Draft your Dream XI</h2>
+          <h2 className="title">Draft your Star XI</h2>
           <p className="lede" style={{ marginTop: 4 }}>
             This is the game. A full eleven, ranked on the global table all
             summer. Pick a formation, captain a player to double their points,
@@ -448,7 +448,7 @@ function Pitch({ formation, picks, captain, captainPlus, captainByMd, onRemove, 
   };
 
   return (
-    <div className={"pitch" + (needsCap ? " needs-cap" : "") + (readOnly ? " read-only" : "")} aria-label={`${formation} pitch with your Dream XI`}>
+    <div className={"pitch" + (needsCap ? " needs-cap" : "") + (readOnly ? " read-only" : "")} aria-label={`${formation} pitch with your Star XI`}>
       <div className="pitch-bg" aria-hidden="true">
         <div className="pitch-stripe"></div>
         <div className="pitch-mid-line"></div>

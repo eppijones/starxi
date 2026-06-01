@@ -1,8 +1,8 @@
-// DREAM XI '26 — main app shell + routing
+// STAR XI '26 — main app shell + routing
 
 const STEPS = [
   { id: "welcome", num: "01", label: "Pick" },
-  { id: "dreamxi", num: "02", label: "Dream XI" },
+  { id: "dreamxi", num: "02", label: "Star XI" },
   { id: "predict", num: "03", label: "Predict" },
   { id: "confirm", num: "04", label: "Confirm" },
   { id: "live",    num: "05", label: "Live" },
@@ -123,18 +123,18 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
 
   const buildShare = () => {
     const capP = captain ? `${captain.flag} ${captain.name}` : "—";
-    const L = ["⚽ My WORLD CUP XI '26 entry — locked in"];
+    const L = ["⚽ My STAR XI '26 entry — locked in"];
     if (nation) L.push(`${nation.flag} ${nation.name} · 2× boost`);
-    L.push(`${predMade}/72 scores called · Dream XI ${formation} (${xiCount}/11)`);
+    L.push(`${predMade}/72 scores called · Star XI ${formation} (${xiCount}/11)`);
     L.push(`Captain: ${capP}`);
     if (boldest) L.push(`Boldest call: ${boldest.winner.flag} ${boldest.winner.name} to beat ${boldest.loser.flag} ${boldest.loser.name}`);
-    L.push("Build yours → wcxi.ai");
+    L.push("Build yours → starxi.app");
     return L.join("\n");
   };
   const doShare = async () => {
     const text = buildShare();
     try {
-      if (navigator.share) { await navigator.share({ title: "WORLD CUP XI", text }); return; }
+      if (navigator.share) { await navigator.share({ title: "STAR XI", text }); return; }
     } catch (e) { /* user cancelled */ return; }
     try {
       await navigator.clipboard.writeText(text);
@@ -148,7 +148,7 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
         <div className="math-card" style={{ textAlign: "center" }}>
           <div className="eyebrow">Not locked in yet</div>
           <h3>Submit your entry to go live.</h3>
-          <p>Build your Dream XI (predictions optional), then hit <strong>Submit</strong> on the Confirm step. Your live scores appear here once you're in.</p>
+          <p>Build your Star XI (predictions optional), then hit <strong>Submit</strong> on the Confirm step. Your live scores appear here once you're in.</p>
           <div className="cta-row" style={{ marginTop: 18, justifyContent: "center" }}>
             <button className="btn gold" onClick={onEditPicks}>Finish my picks <span>→</span></button>
           </div>
@@ -193,7 +193,7 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
         {/* LEFT — your XI, as locked */}
         <div className="locked-pitch-wrap">
           <div className="lp-head">
-            <span className="eyebrow">Your Dream XI</span>
+            <span className="eyebrow">Your Star XI</span>
             <span className="lp-form">{formation}{xiCount < 11 ? ` · ${xiCount}/11` : ""}</span>
           </div>
           {xiCount > 0 ? (
@@ -208,7 +208,7 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
           ) : (
             <div className="card" style={{ textAlign: "center", padding: 28 }}>
               <div className="empty-state">No squad locked — your predictions still score on their own.</div>
-              <button className="btn ghost sm" onClick={onEditPicks} style={{ marginTop: 10 }}>Add a Dream XI →</button>
+              <button className="btn ghost sm" onClick={onEditPicks} style={{ marginTop: 10 }}>Add a Star XI →</button>
             </div>
           )}
           <div className="lp-cap">
@@ -253,7 +253,7 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
             </div>
             <p className="cc-note">
               {xiCount === 0
-                ? "Pick a Dream XI to see how differential your squad is."
+                ? "Pick a Star XI to see how differential your squad is."
                 : differentials.length === 0
                   ? "Pure chalk — every pick is a popular favourite. Safe, but hard to climb with."
                   : `${differentials.length} differential${differentials.length > 1 ? "s" : ""}: ${differentials.slice(0, 3).map(p => p.name).join(", ")}${differentials.length > 3 ? "…" : ""}. These are where you beat the crowd.`}
@@ -498,7 +498,7 @@ function App() {
     });
   }, [auth.loaded, auth.signedIn]);
   const reset = () => {
-    if (!confirm("Start over? This wipes your nation, predictions and Dream XI.")) return;
+    if (!confirm("Start over? This wipes your nation, predictions and Star XI.")) return;
     setState(DEFAULT_STATE);
     goTo("welcome");
   };
@@ -511,10 +511,18 @@ function App() {
         <button
           className="brand"
           onClick={() => goTo("welcome")}
-          aria-label="World Cup XI — home"
+          aria-label="STAR XI — home"
         >
-          <div className="crest-mark"><span>XI</span></div>
-          <div className="brand-name">WORLD CUP XI</div>
+          <img
+            src="brand/star-xi-chalk.svg"
+            alt=""
+            className="crest-mark"
+            style={{ width: 36, height: 38, display: "block" }}
+          />
+          <div className="brand-stack">
+            <div className="brand-name">STAR XI</div>
+            <div className="brand-sub">World Cup 2026 Edition</div>
+          </div>
         </button>
         <div className="topbar-right">
         <nav className="steps" aria-label="progress">
@@ -596,8 +604,8 @@ function App() {
       <footer className="site-footer">
         <div className="footer-cols">
           <div>
-            <strong className="ft-strong">WORLD CUP XI</strong>
-            <p>WCXI — a fan-made prediction + squad game for the summer of '26.</p>
+            <strong className="ft-strong">STAR XI</strong>
+            <p>STAR XI — a fan-made prediction + squad game for the summer of '26.</p>
           </div>
           <div>
             <strong className="ft-strong">Not affiliated with FIFA</strong>

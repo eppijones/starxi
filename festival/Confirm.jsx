@@ -1,4 +1,4 @@
-// DREAM XI '26 — Screen 4: Confirm + scoring explainer
+// STAR XI '26 — Screen 4: Confirm + scoring explainer
 
 function Confirm({ state, setState, onSubmit, onBack }) {
   const nation = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
@@ -52,7 +52,7 @@ function Confirm({ state, setState, onSubmit, onBack }) {
 
       <div className="confirm-grid" style={{ marginTop: 20 }}>
         <div className="card summary-card">
-          <h3>Dream XI — {formation}</h3>
+          <h3>Star XI — {formation}</h3>
           <div className="sum-meta">
             {picks.length}/11 picked ·{" "}
             {captainPlus
@@ -62,7 +62,7 @@ function Confirm({ state, setState, onSubmit, onBack }) {
           </div>
           <div className="xi-preview">
             {picks.length === 0 && (
-              <div className="empty-state">No squad picked yet — the Dream XI is what the table ranks on. Go back and draft your eleven.</div>
+              <div className="empty-state">No squad picked yet — the Star XI is what the table ranks on. Go back and draft your eleven.</div>
             )}
             {["GK", "DF", "MF", "FW"].map(pos => (
               xiByPos[pos].length > 0 && (
@@ -121,9 +121,9 @@ function Confirm({ state, setState, onSubmit, onBack }) {
 
       <div className="math-card" style={{ marginTop: 18 }}>
         <div className="eyebrow">How the table ranks</div>
-        <h3>Your Dream XI is the spine. Predictions crown the champion.</h3>
+        <h3>Your Star XI is the spine. Predictions crown the champion.</h3>
         <p>
-          The global table and your mini-leagues rank on Dream XI points first —
+          The global table and your mini-leagues rank on Star XI points first —
           so a great squad alone keeps you in the fight, predictions or not. When
           XI scores tie, your prediction bonus separates you, and the player who
           tops both stands alone as <strong>ultimate champion</strong>.
@@ -131,7 +131,7 @@ function Confirm({ state, setState, onSubmit, onBack }) {
         <div className="ladder">
           <div className="lstep">
             <div className="ln">Step 1</div>
-            <div className="lt">Dream XI points</div>
+            <div className="lt">Star XI points</div>
           </div>
           <div className="lstep">
             <div className="ln">Step 2</div>

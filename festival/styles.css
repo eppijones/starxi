@@ -126,33 +126,28 @@ body {
 .topbar .brand:active { transform: translateY(0); }
 .topbar .brand:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 .crest-mark {
-  width: 40px; height: 44px;
-  background: var(--ink);
-  display: grid; place-items: center;
-  color: var(--gold);
-  font-family: var(--font-display);
-  font-size: 18px;
-  letter-spacing: .02em;
-  position: relative;
-  /* pennant / shield silhouette */
-  clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%);
-  box-shadow: 0 0 0 3px var(--gold), 0 0 0 5px var(--ink);
+  width: 36px;
+  height: 38px;
+  color: var(--ink);
 }
-.crest-mark::before {
-  content: "";
-  position: absolute; inset: 0;
-  background: repeating-conic-gradient(from 0deg at 50% 35%,
-    rgba(255,192,46,.18) 0deg 10deg, transparent 10deg 20deg);
-}
-.crest-mark span { position: relative; z-index: 1; }
 
-/* brand wordmark */
+/* brand wordmark + sub-line */
+.brand-stack { display: flex; flex-direction: column; line-height: 1; gap: 4px; }
 .brand-name {
   font-family: var(--font-display);
-  font-size: 26px;
-  letter-spacing: .01em;
+  font-size: 22px;
+  letter-spacing: .05em;
   line-height: .9;
   text-transform: uppercase;
+}
+.brand-sub {
+  font-family: var(--font-text, "Inter"), system-ui, sans-serif;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .26em;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: .62;
 }
 
 /* ——— Top bar right cluster: step tracker + auth, pinned right ——— */

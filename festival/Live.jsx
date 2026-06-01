@@ -65,7 +65,7 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
           </div>
           <div className="lh-stat">
             <div className="n">{xiAnim}</div>
-            <div className="l">Dream XI points</div>
+            <div className="l">Star XI points</div>
             <div className="sub">
               {state.captainPlus
                 ? `Captain+ on (${[1,2,3].filter(md => (state.captainByMd||{})[md]).length}/3 set)`
@@ -171,9 +171,9 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
 
           {/* XI returns */}
           <div className="card xi-returns" style={{ marginTop: 14 }}>
-            <h3>Dream XI returns</h3>
+            <h3>Star XI returns</h3>
             {tally.xiBreakdown.length === 0 && (
-              <div className="empty-state">No Dream XI picked — predictions still scoring.</div>
+              <div className="empty-state">No Star XI picked — predictions still scoring.</div>
             )}
             {tally.xiBreakdown
               .sort((a, b) => b.total - a.total)
