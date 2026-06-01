@@ -4,11 +4,18 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ——— Formations ———
 // Slot order on the pitch: GK first, then DF (left→right), then MF, then FW.
+// PINNED are the three shown by default; the rest live behind the "More" popover.
 window.FORMATIONS = {
-  "4-3-3": { GK: 1, DF: 4, MF: 3, FW: 3 },
-  "4-4-2": { GK: 1, DF: 4, MF: 4, FW: 2 },
-  "3-5-2": { GK: 1, DF: 3, MF: 5, FW: 2 },
+  "4-3-3":   { GK: 1, DF: 4, MF: 3, FW: 3 },
+  "4-4-2":   { GK: 1, DF: 4, MF: 4, FW: 2 },
+  "3-5-2":   { GK: 1, DF: 3, MF: 5, FW: 2 },
+  "4-2-3-1": { GK: 1, DF: 4, MF: 5, FW: 1 },
+  "3-4-3":   { GK: 1, DF: 3, MF: 4, FW: 3 },
+  "5-3-2":   { GK: 1, DF: 5, MF: 3, FW: 2 },
+  "4-5-1":   { GK: 1, DF: 4, MF: 5, FW: 1 },
+  "5-4-1":   { GK: 1, DF: 5, MF: 4, FW: 1 },
 };
+window.FORMATIONS_PINNED = ["4-3-3", "4-4-2", "3-5-2"];
 
 window.MAX_SWAPS = 3;
 
@@ -43,13 +50,15 @@ function useCountUp(target, durMs = 900) {
 }
 
 // ——— Scoring math ———
-// scoreMatch() and scoreEvents() now live in scoring-core.js (loaded before this
+// scoreBracket() and scoreEvents() live in scoring-core.js (loaded before this
 // file as plain JS) so the browser and the server-side leaderboard share ONE
-// scoring implementation. They are available here as window.scoreMatch /
+// scoring implementation. They are available here as window.scoreBracket /
 // window.scoreEvents and as the bare globals the simulation/UI already use.
 
 // ——— Simulation engine ———
-// Produces per-match results AND per-matchday player events so Captain+ works.
+// Produces per-match results, per-matchday player events (for Captain+), AND
+// a fully-resolved bracket (group standings + every KO winner) so the new
+// Road-to-the-Final scoring has something to compare the user's picks against.
 function simulateTournament(seed = 26) {
   const rng = makeRng(seed);
 
@@ -67,6 +76,44 @@ function simulateTournament(seed = 26) {
 
   const results = {};
   window.FIXTURES.forEach(fx => { results[fx.id] = matchResult(fx.home, fx.away); });
+
+  // ——— Build the simulated bracket ———
+  // 1. Compute group standings from the simulated group scores.
+  const bracket = { groups: {}, advances: { r32: {}, r16: {}, qf: {}, sf: {}, final: {} } };
+  Object.keys(window.GROUPS).forEach(g => {
+    const teams = window.GROUPS[g];
+    const stats = {};
+    teams.forEach(t => { stats[t.code] = { team: t, pts: 0, gd: 0, gf: 0, ga: 0 }; });
+    window.FIXTURES.filter(fx => fx.group === g).forEach(fx => {
+      const r = results[fx.id]; if (!r) return;
+      const hs = stats[fx.home.code], as = stats[fx.away.code];
+      hs.gf += r.home; hs.ga += r.away; hs.gd += r.home - r.away;
+      as.gf += r.away; as.ga += r.home; as.gd += r.away - r.home;
+      if (r.home > r.away) hs.pts += 3;
+      else if (r.home < r.away) as.pts += 3;
+      else { hs.pts += 1; as.pts += 1; }
+    });
+    const sorted = Object.values(stats).sort((a, b) =>
+      b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.rank - b.team.rank
+    );
+    bracket.groups[g] = sorted.map(s => s.team.code);
+  });
+  // 2. Roll the knockout rounds. Each match is a one-shot Poisson clash; the
+  //    side with the higher score wins (ties resolve by FIFA rank as a stand-in
+  //    for "extra time + pens" — good enough for the demo "run again" view).
+  ["r32", "r16", "qf", "sf", "final"].forEach(round => {
+    const size = window.KO_ROUND_SIZES[round];
+    for (let i = 0; i < size; i++) {
+      const m = window.resolveKoMatch(bracket, round, i);
+      if (!m.home || !m.away) continue;
+      const r = matchResult(m.home, m.away);
+      let winner;
+      if (r.home > r.away) winner = m.home;
+      else if (r.away > r.home) winner = m.away;
+      else winner = m.home.rank <= m.away.rank ? m.home : m.away;
+      bracket.advances[round][i] = winner.code;
+    }
+  });
 
   // Per-player, per-matchday event line.
   // Players tied to nations only score on matchdays their nation played.
@@ -97,7 +144,7 @@ function simulateTournament(seed = 26) {
     playerEvents[p.id] = { byMd, total };
   });
 
-  return { results, playerEvents };
+  return { results, playerEvents, bracket };
 }
 
 // tallyUser() (full per-user result-set) now lives in scoring-core.js so the
@@ -184,7 +231,7 @@ function canPickPosition(pickIds, formation, pos) {
   return cur[pos] < limits[pos];
 }
 
-// Note: scoreMatch / scoreEvents / tallyUser are exported by scoring-core.js.
+// Note: scoreBracket / scoreEvents / tallyUser are exported by scoring-core.js.
 Object.assign(window, {
   useCountUp,
   simulateTournament, buildLeague,

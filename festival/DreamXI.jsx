@@ -1,4 +1,7 @@
 // STAR XI '26 — Screen 3: Star XI (11-player squad with pitch visualization)
+// Single-viewport layout: header up top, body splits into left (filters + scrollable
+// player list) and right (formation picker + pitch + compact captain bar). Nothing
+// outside the player list scrolls — the whole screen lives inside the shell body.
 
 const POS_LABELS = { ALL: "All", GK: "GK", DF: "DF", MF: "MF", FW: "FW" };
 
@@ -6,9 +9,11 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
   const formation = state.formation || "4-3-3";
   const limits = window.FORMATIONS[formation];
   const picks = state.picks || [];
-  const captain = state.captain;
-  const captainPlus = !!state.captainPlus;
+  // Per-matchweek captain is now the only mode — three armbands (MD1/MD2/MD3),
+  // and the GW3 captain stays on for the knockouts (with GW2 → GW1 fallback).
+  // The legacy single-captain field is kept in state for back-compat but unused.
   const captainByMd = state.captainByMd || {};
+  const mdCount = [1, 2, 3].filter(md => captainByMd[md]).length;
 
   const counts = useMemo(() => window.countByPos(picks), [picks]);
   const totalLeft = 11 - picks.length;
@@ -23,9 +28,10 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
   const [posFilter, setPosFilter] = useState(suggestedFilter);
   const [query, setQuery] = useState("");
   const [natFilter, setNatFilter] = useState("ALL");
-  const [showAdv, setShowAdv] = useState(!!captainPlus);
+  const [sortMode, setSortMode] = useState("rating");
+  const [moreFormOpen, setMoreFormOpen] = useState(false);
 
-  // Every nation present in the pool, sorted by name, for the nation dropdown.
+  // Every nation present in the pool, sorted alphabetically.
   const natOptions = useMemo(() => {
     const byCode = {};
     window.PLAYERS.forEach(p => { if (!byCode[p.nat]) byCode[p.nat] = p.flag; });
@@ -36,8 +42,6 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, []);
-  // The player's chosen nation, pinned to the top of the dropdown if it has players.
-  const yourNat = state.nation ? natOptions.find(o => o.code === state.nation) : null;
   // Re-sync filter when picks change and current filter is full
   useEffect(() => {
     if (posFilter !== "ALL" && counts[posFilter] >= limits[posFilter] && picks.length < 11) {
@@ -45,11 +49,22 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
     }
   }, [counts, posFilter, limits, suggestedFilter, picks.length]);
 
-  // The pool is now ~1,250 real, announced players — far too many to scroll.
-  // Show the top-form slice by default; a search box (name / nation / club)
-  // narrows to anything. Picked players always stay visible at the tail.
+  // Close the formation popover when clicking outside it.
+  const moreFormRef = useRef(null);
+  useEffect(() => {
+    if (!moreFormOpen) return;
+    const onDoc = (e) => {
+      if (moreFormRef.current && !moreFormRef.current.contains(e.target)) {
+        setMoreFormOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [moreFormOpen]);
+
+  // The pool is ~1,250 real, announced players. Show the top-form slice by default;
+  // the search + nation filter narrows to anything. Picked players always stay visible.
   const LIST_LIMIT = 60;
-  // Accent-insensitive: "vini"→Vinícius, "nicolas"→Nicolás, "mbappe"→Mbappé.
   const norm = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const { shown, hiddenCount } = useMemo(() => {
     const q = norm(query.trim());
@@ -68,19 +83,17 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
       const ap = picks.includes(a.id);
       const bp = picks.includes(b.id);
       if (ap !== bp) return ap ? 1 : -1;
+      if (sortMode === "az") return a.name.localeCompare(b.name);
       return b.form - a.form;
     });
-    // Only cap the firehose "everything" view — once you've narrowed by search
-    // or nation the list is small enough to show in full.
     const narrowed = q || natFilter !== "ALL";
     if (!narrowed && sorted.length > LIST_LIMIT) {
       const top = sorted.slice(0, LIST_LIMIT);
-      // keep any already-picked players that fell past the cut visible
       const pickedTail = sorted.slice(LIST_LIMIT).filter(p => picks.includes(p.id));
       return { shown: [...top, ...pickedTail], hiddenCount: sorted.length - top.length - pickedTail.length };
     }
     return { shown: sorted, hiddenCount: 0 };
-  }, [posFilter, picks, query, natFilter]);
+  }, [posFilter, picks, query, natFilter, sortMode]);
 
   const togglePick = (p) => {
     setState(s => {
@@ -105,8 +118,23 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
     });
   };
 
+  // Tap-on-shirt now manages the per-matchweek armbands. If the player is
+  // already a captain in any MD, tapping clears them from every MD. Otherwise
+  // they fill the first empty MD slot (MD1 → MD2 → MD3); if all three are
+  // already filled, the tap is ignored (use the dropdowns to reassign).
   const setCaptain = (id) => {
-    setState(s => ({ ...s, captain: s.captain === id ? null : id }));
+    setState(s => {
+      const cur = { ...(s.captainByMd || {}) };
+      const inMd = [1, 2, 3].find(md => cur[md] === id);
+      if (inMd) {
+        [1, 2, 3].forEach(md => { if (cur[md] === id) delete cur[md]; });
+        return { ...s, captainByMd: cur };
+      }
+      const emptyMd = [1, 2, 3].find(md => !cur[md]);
+      if (!emptyMd) return s;
+      cur[emptyMd] = id;
+      return { ...s, captainByMd: cur };
+    });
   };
 
   const setCaptainForMd = (md, id) => {
@@ -136,6 +164,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
       });
       return { ...s, formation: f, picks: nextPicks };
     });
+    setMoreFormOpen(false);
   };
 
   const autoFillXI = () => {
@@ -152,14 +181,26 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
           .slice(0, need);
         candidates.forEach(c => nextPicks.push(c.id));
       });
-      // Default captain = highest-form player picked, if none set
-      let nextCap = s.captain;
-      if (!nextCap && nextPicks.length) {
-        nextCap = nextPicks
-          .map(id => window.PLAYERS.find(p => p.id === id))
-          .sort((a, b) => b.form - a.form)[0].id;
-      }
-      return { ...s, picks: nextPicks, captain: nextCap };
+      // Seed the three per-matchweek captains with the top-form picks (MD1
+      // = highest, MD2 = next, MD3 = third). Existing assignments are kept.
+      const nextCapByMd = { ...(s.captainByMd || {}) };
+      const ranked = nextPicks
+        .map(id => window.PLAYERS.find(p => p.id === id))
+        .filter(Boolean)
+        .sort((a, b) => b.form - a.form);
+      let cursor = 0;
+      [1, 2, 3].forEach(md => {
+        if (nextCapByMd[md]) return;
+        while (cursor < ranked.length &&
+               [1, 2, 3].some(m => nextCapByMd[m] === ranked[cursor].id)) {
+          cursor++;
+        }
+        if (cursor < ranked.length) {
+          nextCapByMd[md] = ranked[cursor].id;
+          cursor++;
+        }
+      });
+      return { ...s, picks: nextPicks, captainByMd: nextCapByMd, captainPlus: true };
     });
   };
 
@@ -168,222 +209,226 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
     setState(s => ({ ...s, picks: [], captain: null, captainByMd: {} }));
   };
 
+  const pinned = window.FORMATIONS_PINNED || Object.keys(window.FORMATIONS).slice(0, 3);
+  const allFormations = Object.keys(window.FORMATIONS);
+  // If the active formation isn't in the pinned set, surface it in the row so
+  // the user can see what's selected without opening the popover.
+  const visibleFormations = pinned.includes(formation) ? pinned : [...pinned, formation];
+
   return (
     <div className="step-screen">
-      <div className="step-scroll stagger">
-        <div className="dxi-head">
+      <div className="dxi-screen">
+        <header className="dxi-head">
           <div className="ph-titles">
-            <div className="eyebrow">Step 2 · The main event</div>
             <h2 className="title">Draft your Star XI</h2>
-            <p className="lede">A full eleven, ranked all summer. Pick a formation, captain a player for ×2 — predictions are an optional bonus.</p>
+            <p className="lede">
+              No limits! Just your dream eleven, ranked all summer.
+              Pick a formation, captain a player for ×2 points and rotate the armband each match week, if you want!
+            </p>
           </div>
           <div className="dxi-actions">
             <button className="btn ghost sm" onClick={autoFillXI}>Auto-fill XI</button>
             <button className="btn ghost sm" onClick={clearXI}>Clear</button>
           </div>
-        </div>
+        </header>
 
-        <div className="dxi-layout">
-        {/* LEFT: position filter + player list */}
-        <div>
-          <div className="dxi-controls">
-            <div className="pos-tabs">
-              {Object.entries(POS_LABELS).map(([k, l]) => {
-                const c = k === "ALL"
-                  ? picks.length + "/11"
-                  : `${counts[k]}/${limits[k]}`;
-                const full = k !== "ALL" && counts[k] >= limits[k];
+        <div className="dxi-body">
+          {/* LEFT: position filter + scrollable player list */}
+          <section className="dxi-left">
+            <div className="dxi-controls">
+              <div className="pos-tabs">
+                {Object.entries(POS_LABELS).map(([k, l]) => {
+                  const c = k === "ALL"
+                    ? picks.length + "/11"
+                    : `${counts[k]}/${limits[k]}`;
+                  const full = k !== "ALL" && counts[k] >= limits[k];
+                  return (
+                    <button
+                      key={k}
+                      className={"pos-tab" + (posFilter === k ? " sel" : "") + (full ? " full" : "")}
+                      onClick={() => setPosFilter(k)}
+                    >
+                      {l} <span className="pct">{c}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="dxi-find">
+                <div className="dxi-search">
+                  <span className="dxi-search-ico" aria-hidden="true">⌕</span>
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Search players: name or club…"
+                    aria-label="Search players by name, nation or club"
+                  />
+                  {query && (
+                    <button className="dxi-search-x" onClick={() => setQuery("")} aria-label="Clear search">×</button>
+                  )}
+                </div>
+                <select
+                  className="dxi-nat"
+                  value={natFilter}
+                  onChange={e => setNatFilter(e.target.value)}
+                  aria-label="Filter by nation"
+                >
+                  <option value="ALL">🌍 All nations</option>
+                  {natOptions.map(o => (
+                    <option key={o.code} value={o.code}>{o.flag} {o.name}</option>
+                  ))}
+                </select>
+                <select
+                  className="dxi-sort"
+                  value={sortMode}
+                  onChange={e => setSortMode(e.target.value)}
+                  aria-label="Sort players"
+                >
+                  <option value="rating">↓ Rating</option>
+                  <option value="az">A–Z Name</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="player-grid scroll">
+              {shown.map(p => {
+                const picked = picks.includes(p.id);
+                const posFull = counts[p.pos] >= limits[p.pos];
+                const disabled = !picked && (posFull || picks.length >= 11);
                 return (
                   <button
-                    key={k}
-                    className={"pos-tab" + (posFilter === k ? " sel" : "") + (full ? " full" : "")}
-                    onClick={() => setPosFilter(k)}
+                    key={p.id}
+                    className={
+                      "player-card" +
+                      (picked ? " picked" : "") +
+                      (disabled ? " is-disabled" : "")
+                    }
+                    onClick={() => togglePick(p)}
+                    disabled={disabled}
+                    title={p.hype ? `${p.name}: ${p.hype}` : p.name}
                   >
-                    {l} <span className="pct">{c}</span>
+                    <div className="pc-flag">{p.flag}</div>
+                    <div className="pc-body">
+                      <div className="pc-name">{p.name}</div>
+                      <div className="pc-meta">{p.pos} · {p.nat}</div>
+                    </div>
+                    <div className="pc-form">{p.form.toFixed(1)}</div>
                   </button>
                 );
               })}
+              {shown.length === 0 && (
+                <div className="empty-state">
+                  No {posFilter !== "ALL" ? POS_LABELS[posFilter] + " " : ""}players
+                  {query ? <> match “{query}”</> : null}
+                  {natFilter !== "ALL" ? <> for {natOptions.find(o => o.code === natFilter)?.name}</> : null}.{" "}
+                  <button className="link-btn" onClick={() => { setQuery(""); setNatFilter("ALL"); }}>Clear filters</button>
+                </div>
+              )}
+              {hiddenCount > 0 && (
+                <div className="player-more">
+                  +{hiddenCount} more {posFilter === "ALL" ? "" : POS_LABELS[posFilter] + " "}players.
+                  <strong> Search</strong> by name, nation or club to find anyone.
+                </div>
+              )}
             </div>
-            <div className="dxi-find">
-              <div className="dxi-search">
-                <span className="dxi-search-ico" aria-hidden="true">⌕</span>
-                <input
-                  type="search"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder="Search players — name or club…"
-                  aria-label="Search players by name, nation or club"
-                />
-                {query && (
-                  <button className="dxi-search-x" onClick={() => setQuery("")} aria-label="Clear search">×</button>
-                )}
-              </div>
-              <select
-                className="dxi-nat"
-                value={natFilter}
-                onChange={e => setNatFilter(e.target.value)}
-                aria-label="Filter by nation"
-              >
-                <option value="ALL">🌍 All nations</option>
-                {yourNat && (
-                  <option value={yourNat.code}>{yourNat.flag} {yourNat.name} — yours</option>
-                )}
-                {natOptions.filter(o => !yourNat || o.code !== yourNat.code).map(o => (
-                  <option key={o.code} value={o.code}>{o.flag} {o.name}</option>
+          </section>
+
+          {/* RIGHT: formation + pitch + captain bar */}
+          <aside className="xi-side">
+            <div className="formation-row" ref={moreFormRef}>
+              <span className="fr-label">Formation</span>
+              <div className="formation-tabs">
+                {visibleFormations.map(f => (
+                  <button
+                    key={f}
+                    className={"formation-tab" + (formation === f ? " sel" : "")}
+                    onClick={() => setFormation(f)}
+                  >{f}</button>
                 ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="player-grid">
-            {shown.map(p => {
-              const picked = picks.includes(p.id);
-              const posFull = counts[p.pos] >= limits[p.pos];
-              const disabled = !picked && (posFull || picks.length >= 11);
-              return (
                 <button
-                  key={p.id}
-                  className={"player-card" + (picked ? " picked" : "")}
-                  onClick={() => togglePick(p)}
-                  disabled={disabled}
-                  style={disabled ? { opacity: .35, cursor: "not-allowed" } : {}}
+                  className={"formation-more" + (moreFormOpen ? " open" : "")}
+                  onClick={() => setMoreFormOpen(v => !v)}
+                  aria-label="More tactics"
+                  aria-expanded={moreFormOpen}
+                  title="More tactics"
                 >
-                  <div className="pc-flag">{p.flag}</div>
-                  <div>
-                    <div className="pc-name">{p.name}</div>
-                    <div className="pc-meta">{p.pos} · {p.nat}</div>
-                  </div>
-                  <div className="pc-form">{p.form.toFixed(1)}</div>
-                  <div className="pc-hype">{p.hype}</div>
+                  <span aria-hidden="true">⊞</span>
                 </button>
-              );
-            })}
-            {shown.length === 0 && (
-              <div className="empty-state">
-                No {posFilter !== "ALL" ? POS_LABELS[posFilter] + " " : ""}players
-                {query ? <> match “{query}”</> : null}
-                {natFilter !== "ALL" ? <> for {natOptions.find(o => o.code === natFilter)?.name}</> : null}.{" "}
-                <button className="link-btn" onClick={() => { setQuery(""); setNatFilter("ALL"); }}>Clear filters</button>
               </div>
-            )}
-            {hiddenCount > 0 && (
-              <div className="player-more">
-                +{hiddenCount} more {posFilter === "ALL" ? "" : POS_LABELS[posFilter] + " "}players —
-                <strong> search</strong> by name, nation or club to find anyone.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT: pitch + captain */}
-        <aside className="xi-side">
-          <div className="formation-row">
-            <span className="fr-label">Formation</span>
-            <div className="formation-tabs">
-              {Object.keys(window.FORMATIONS).map(f => (
-                <button
-                  key={f}
-                  className={"formation-tab" + (formation === f ? " sel" : "")}
-                  onClick={() => setFormation(f)}
-                >{f}</button>
-              ))}
-            </div>
-          </div>
-
-          <Pitch
-            formation={formation}
-            picks={picks}
-            captain={captain}
-            captainPlus={captainPlus}
-            captainByMd={captainByMd}
-            onRemove={togglePick}
-            onCaptain={setCaptain}
-          />
-
-          <div className="cap-block">
-            {/* Season captain — the default path, always visible */}
-            {!captainPlus && (
-              captain ? (
-                <div className="cap-summary set">
-                  <span className="cap-star">★</span>
-                  <span>
-                    {window.PLAYERS.find(p => p.id === captain)?.flag}{" "}
-                    <strong>{window.PLAYERS.find(p => p.id === captain)?.name}</strong>{" "}
-                    is your captain — goals, assists &amp; clean sheets all score ×2.
-                  </span>
-                </div>
-              ) : (
-                <div className="cap-summary empty">
-                  <span className="cap-star">★</span>
-                  <span>
-                    {picks.length === 0
-                      ? "Pick your XI, then tap a shirt on the pitch to set your captain (×2 points)."
-                      : "Tap a shirt on the pitch to set your captain — they score ×2 all summer."}
-                  </span>
-                </div>
-              )
-            )}
-
-            {/* Advanced: per-matchday captain, tucked away for the obsessives */}
-            <button
-              className={"cap-adv-toggle" + (showAdv ? " open" : "")}
-              onClick={() => setShowAdv(v => !v)}
-              aria-expanded={showAdv}
-            >
-              <span className="cat-chev">{showAdv ? "▾" : "▸"}</span>
-              Advanced · per-matchday captain
-              {captainPlus && <span className="cap-adv-on">ON</span>}
-            </button>
-
-            {showAdv && (
-              <div className="cap-adv">
-                <label className="cap-toggle">
-                  <input
-                    type="checkbox"
-                    checked={captainPlus}
-                    onChange={e => setState(s => ({ ...s, captainPlus: e.target.checked }))}
-                  />
-                  <span>
-                    <strong>Captain+</strong>
-                    <em>Swap captain each matchday instead of one for the summer.</em>
-                  </span>
-                </label>
-
-                {captainPlus && (
-                  <div className="cap-md-rows">
-                    {[1, 2, 3].map(md => {
-                      const cur = captainByMd[md];
-                      const pickedPlayers = picks.map(id => window.PLAYERS.find(p => p.id === id)).filter(Boolean);
-                      return (
-                        <div key={md} className="cap-md-row">
-                          <span className="cap-md-label">MD{md}</span>
-                          <select
-                            className="cap-md-select"
-                            value={cur || ""}
-                            onChange={e => setCaptainForMd(md, e.target.value || null)}
-                          >
-                            <option value="">— none —</option>
-                            {pickedPlayers.map(p => (
-                              <option key={p.id} value={p.id}>
-                                {p.flag} {p.name} ({p.pos})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    })}
+              {moreFormOpen && (
+                <div className="formation-pop" role="menu">
+                  <div className="fp-head">All tactics</div>
+                  <div className="fp-grid">
+                    {allFormations.map(f => (
+                      <button
+                        key={f}
+                        className={"fp-tile" + (formation === f ? " sel" : "")}
+                        onClick={() => setFormation(f)}
+                        role="menuitem"
+                      >
+                        <span className="fp-name">{f}</span>
+                        <span className="fp-sub">
+                          {window.FORMATIONS[f].DF} · {window.FORMATIONS[f].MF} · {window.FORMATIONS[f].FW}
+                        </span>
+                      </button>
+                    ))}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
 
-          <div className="notice">
-            ⓘ Squads provisional. Official 26-man rosters drop early June 2026 —
-            you'll get one free swap window before kickoff to lock in your XI.
-          </div>
-        </aside>
-      </div>
+            <Pitch
+              formation={formation}
+              picks={picks}
+              onPicksChange={(next) => setState(s => ({ ...s, picks: next }))}
+              captain={null}
+              captainPlus={true}
+              captainByMd={captainByMd}
+              onRemove={togglePick}
+              onCaptain={setCaptain}
+            />
+
+            <div className="cap-bar">
+              <div className="cap-bar-summary">
+                <span className={"cap-star" + (mdCount === 3 ? " set" : "")}>★★★</span>
+                <span className="cap-bar-text">
+                  <strong>Three captains, one per round.</strong> Pick a different ×2 armband for GW1, GW2 &amp; GW3.
+                  <em> ({mdCount}/3 set)</em>
+                </span>
+              </div>
+
+              <div className="cap-md-strip">
+                {[1, 2, 3].map(md => {
+                  const cur = captainByMd[md];
+                  const pickedPlayers = picks.map(id => window.PLAYERS.find(p => p.id === id)).filter(Boolean);
+                  return (
+                    <label key={md} className={"cap-md-chip" + (cur ? " set" : "")}>
+                      <span className="cap-md-tag">GW{md}</span>
+                      <select
+                        value={cur || ""}
+                        onChange={e => setCaptainForMd(md, e.target.value || null)}
+                        aria-label={`Captain for GW${md}`}
+                      >
+                        <option value="">— pick —</option>
+                        {pickedPlayers.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.flag} {p.name} ({p.pos})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <p className="cap-note">
+                Your <strong>GW3 captain</strong> stays on for the knockouts. If your team is out
+                or your captain is injured, it falls back to GW2 → GW1. Send and forget. No
+                in-tournament subs.
+              </p>
+            </div>
+          </aside>
+        </div>
       </div>
 
       <div className="step-foot">
@@ -396,7 +441,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
           <button className="pill primary" disabled>Pick {totalLeft} more</button>
         ) : (
           <>
-            <button className="pill ghost" onClick={onNext}>+ Predictions</button>
+            <button className="pill ghost" onClick={onNext}>+ Road to the Final</button>
             <button className="pill primary" onClick={onSkip}>Review &amp; lock in <span>→</span></button>
           </>
         )}
@@ -406,7 +451,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
 }
 
 // ——— Pitch visualization ———
-function Pitch({ formation, picks, captain, captainPlus, captainByMd, onRemove, onCaptain, readOnly }) {
+function Pitch({ formation, picks, onPicksChange, captain, captainPlus, captainByMd, onRemove, onCaptain, readOnly }) {
   const limits = window.FORMATIONS[formation];
   const needsCap = !readOnly && !captainPlus && !captain && picks.length > 0;
   const layout = [
@@ -415,6 +460,20 @@ function Pitch({ formation, picks, captain, captainPlus, captainByMd, onRemove, 
     { pos: "DF", n: limits.DF },
     { pos: "GK", n: limits.GK },
   ];
+
+  // Drag-and-drop: swap two filled slots by reordering picks array.
+  const dragId = useRef(null);
+  const handleDragStart = (id) => { dragId.current = id; };
+  const handleDrop = (targetId) => {
+    if (!dragId.current || dragId.current === targetId || !onPicksChange) return;
+    const next = [...picks];
+    const ai = next.indexOf(dragId.current);
+    const bi = next.indexOf(targetId);
+    if (ai === -1 || bi === -1) return;
+    [next[ai], next[bi]] = [next[bi], next[ai]];
+    onPicksChange(next);
+    dragId.current = null;
+  };
 
   // Pick the next player(s) from picks[] that match each row's position.
   const playersByPos = { GK: [], DF: [], MF: [], FW: [] };
@@ -449,34 +508,56 @@ function Pitch({ formation, picks, captain, captainPlus, captainByMd, onRemove, 
               const p = playersByPos[pos][i];
               if (!p) {
                 return (
-                  <div key={i} className="pitch-slot empty" title={`${pos} slot — pick from list`}>
+                  <div key={i} className="pitch-slot empty" title={`${pos} slot: pick from list`}>
                     <span className="slot-pos">{pos}</span>
                   </div>
                 );
               }
               const cap = isCaptain(p.id);
+              const capMd = captainPlus
+                ? [1, 2, 3].find(md => captainByMd && captainByMd[md] === p.id)
+                : null;
+              const tip = readOnly
+                ? `${p.name} · ${p.pos} · ${p.nat}`
+                : (cap
+                    ? `${p.name} is your MD${capMd} captain. Tap to clear`
+                    : `Tap to make ${p.name} a captain (next empty MD slot)`);
               return (
-                <div key={p.id} className={"pitch-slot filled" + (cap ? " cap" : "")}>
-                  <button
-                    className="slot-tile"
-                    title={readOnly ? `${p.name} · ${p.pos} · ${p.nat}` : `Tap to make ${p.name} captain`}
-                    onClick={readOnly ? undefined : () => onCaptain(p.id)}
-                  >
-                    <span className="slot-flag">{p.flag}</span>
-                    {cap && <span className="cap-mark" aria-label="captain">★</span>}
-                    {!cap && !readOnly && <span className="cap-hint" aria-hidden="true">★</span>}
-                  </button>
+                <div
+                  key={p.id}
+                  className={"pitch-slot filled" + (cap ? " cap" : "")}
+                  draggable={!readOnly}
+                  onDragStart={!readOnly ? () => handleDragStart(p.id) : undefined}
+                  onDragOver={!readOnly ? (e) => e.preventDefault() : undefined}
+                  onDrop={!readOnly ? () => handleDrop(p.id) : undefined}
+                >
+                  <div className="slot-shirt">
+                    <button
+                      className="slot-tile"
+                      title={tip}
+                      onClick={readOnly ? undefined : () => onCaptain(p.id)}
+                    >
+                      <span className="slot-flag">{p.flag}</span>
+                      {cap && (
+                        <span className="cap-mark" aria-label={`MD${capMd} captain`}>
+                          {capMd || "★"}
+                        </span>
+                      )}
+                      {!cap && !readOnly && <span className="cap-hint" aria-hidden="true">★</span>}
+                    </button>
+                    {!readOnly && (
+                      <button
+                        className="slot-x"
+                        aria-label="Remove"
+                        title={`Remove ${p.name}`}
+                        onClick={(e) => { e.stopPropagation(); onRemove(p); }}
+                      >×</button>
+                    )}
+                  </div>
                   <div className="slot-info">
                     <div className="slot-name">{p.name}</div>
                     <div className="slot-meta">{p.nat} · {p.form.toFixed(1)}</div>
                   </div>
-                  {!readOnly && (
-                    <button
-                      className="slot-x"
-                      aria-label="Remove"
-                      onClick={(e) => { e.stopPropagation(); onRemove(p); }}
-                    >×</button>
-                  )}
                 </div>
               );
             })}
@@ -486,9 +567,7 @@ function Pitch({ formation, picks, captain, captainPlus, captainByMd, onRemove, 
 
       <div className="pitch-foot">
         <span>{formation}</span>
-        <span className="pitch-tip">
-          {readOnly ? "your locked-in XI" : (needsCap ? "★ tap a shirt to set your captain" : "tap shirt = captain · tap × = remove")}
-        </span>
+        {readOnly && <span className="pitch-tip">your locked-in XI</span>}
       </div>
     </div>
   );

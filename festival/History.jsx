@@ -8,7 +8,7 @@ function History({ onBack }) {
         <div className="ph-titles">
           <div className="eyebrow">Records & history</div>
           <h2 className="title">Ninety-six years of summer.</h2>
-          <p className="lede">Twenty-two tournaments, eight champions. Here's the canon — and the records your Star XI is chasing this summer.</p>
+          <p className="lede">Twenty-two tournaments, eight champions. Here's the canon and the records your Star XI is chasing this summer.</p>
         </div>
       </div>
 

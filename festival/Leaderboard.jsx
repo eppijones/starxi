@@ -14,8 +14,8 @@ function LbRow({ row }) {
   // Headline number = Dream XI points (the ranking spine). The sub-line surfaces
   // the optional prediction bonus so XI-only and combined players read clearly.
   const bits = [];
-  if (row.predictionPts) bits.push(`+${row.predictionPts} predictions`);
-  if (row.bullseyes) bits.push(`${row.bullseyes} exact`);
+  if (row.predictionPts) bits.push(`+${row.predictionPts} Road`);
+  if (row.bullseyes) bits.push(`${row.bullseyes} perfect`);
   const sub = bits.join(" · ") || "Star XI only";
   // Ultimate champion — leads the table on the strength of BOTH layers.
   const ultimate = row.rank === 1 && row.xiPts > 0 && row.predictionPts > 0;
@@ -25,7 +25,7 @@ function LbRow({ row }) {
       <span className="nm">
         {row.isYou ? "You" : row.name}
         {ultimate && (
-          <span className="lb-crown" title="Ultimate champion — tops the table with a strong XI and predictions">👑</span>
+          <span className="lb-crown" title="Ultimate champion: tops the table with a strong XI and a strong Road">👑</span>
         )}
         <small>{sub}</small>
       </span>
@@ -48,7 +48,7 @@ function LbTable({ data, loading, onRefresh }) {
         <h3>Leaderboards go live at kickoff</h3>
         <p>
           Once the tournament server is switched on, you'll see the global table
-          and your private mini-leagues here — scored automatically from real
+          and your private mini-leagues here, scored automatically from real
           results. Your entry is already saved.
         </p>
       </div>
@@ -87,7 +87,7 @@ function LbTable({ data, loading, onRefresh }) {
 
       {top.length === 0 ? (
         <div className="empty-state">
-          No entries here yet — be the first to lock one in.
+          No entries here yet. Be the first to lock one in.
         </div>
       ) : (
         <div className="lb-rows">
@@ -105,8 +105,8 @@ function LbTable({ data, loading, onRefresh }) {
       )}
 
       <p className="lb-legend">
-        Ranked on <strong>Star XI points</strong>. Score predictions are a bonus
-        that breaks ties — top both and you're the <strong>ultimate champion</strong> 👑.
+        Ranked on <strong>Star XI points</strong>. The Road-to-the-Final picks
+        are a bonus that breaks ties. Top both and you're the <strong>ultimate champion</strong> 👑.
       </p>
     </div>
   );
@@ -258,7 +258,6 @@ function Leaderboard({ onEditPicks, onBack }) {
         <div className="step-scroll stagger">
           <div className="lb-screen">
             <div className="lb-head">
-              <div className="eyebrow">Leaderboard</div>
               <h2 className="lb-title">See where you stand</h2>
             </div>
             <div className="lb-soft">
@@ -290,7 +289,6 @@ function Leaderboard({ onEditPicks, onBack }) {
       <div className="step-scroll stagger">
         <div className="lb-screen">
           <div className="lb-head">
-            <div className="eyebrow">Leaderboard</div>
             <h2 className="lb-title">
               {scope.kind === "manage"
                 ? "Mini-leagues"

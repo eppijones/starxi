@@ -3,20 +3,31 @@
 const STEPS = [
   { id: "welcome", num: "01", label: "Pick" },
   { id: "dreamxi", num: "02", label: "Star XI" },
-  { id: "predict", num: "03", label: "Predict" },
+  { id: "predict", num: "03", label: "Road" },
   { id: "confirm", num: "04", label: "Confirm" },
   { id: "live",    num: "05", label: "Live" },
 ];
 
+// Empty bracket scaffold — kept here so DEFAULT_STATE, hydrate, and the reset
+// path all use the same shape. Predict.jsx has its own ensureBracket() helper
+// that normalises partial loads back to this layout.
+function emptyBracket() {
+  return {
+    groups: {},
+    advances: { r32: {}, r16: {}, qf: {}, sf: {}, final: {} },
+  };
+}
+
 const DEFAULT_STATE = {
   nation: null,
-  predictions: {},
+  bracket: emptyBracket(),
   picks: [],
   formation: "4-3-3",
   captain: null,
   captainPlus: false,
   captainByMd: {},
   swaps: [],
+  teamName: "",
   submitted: false,
   submittedAt: null,
 };
@@ -24,24 +35,426 @@ const DEFAULT_STATE = {
 // Tournament kickoff — Group A opener, Mexico City, Jun 11 2026.
 const KICKOFF = new Date("2026-06-11T16:00:00Z");
 
+// ——— Helpers used by the redesigned summary screen ———
+// Order picks into formation slots GK → DF → MF → FW so the numbered "Starting
+// XI" list reads like a real team sheet (1 = keeper, 2..5 = defence, etc.).
+function orderXi(picks, formation) {
+  const byPos = { GK: [], DF: [], MF: [], FW: [] };
+  (picks || []).forEach((id) => {
+    const p = window.PLAYERS.find((x) => x.id === id);
+    if (p) byPos[p.pos].push(p);
+  });
+  return [...byPos.GK, ...byPos.DF, ...byPos.MF, ...byPos.FW];
+}
+
+// Which matchday is "current" for the player's nation? Falls back to MD1 when
+// no fixtures have been played yet (pre-launch); otherwise the next unfinished
+// game's matchday. Also returns the opponent for that match.
+function nationMatchdayStatus(code, statusById) {
+  if (!code) return { matchday: 1, opponent: null, played: 0, total: 3 };
+  const fxs = (window.FIXTURES || [])
+    .filter((f) => f.home.code === code || f.away.code === code)
+    .sort((a, b) => a.matchday - b.matchday);
+  const played = fxs.filter(
+    (f) => statusById && statusById[f.id] === "FINISHED"
+  ).length;
+  const next =
+    fxs.find((f) => !statusById || statusById[f.id] !== "FINISHED") ||
+    fxs[fxs.length - 1] ||
+    null;
+  const opponent = next
+    ? next.home.code === code
+      ? next.away
+      : next.home
+    : null;
+  return {
+    matchday: next ? next.matchday : 3,
+    opponent,
+    played,
+    total: fxs.length || 3,
+    nextFixture: next || null,
+  };
+}
+
+// ——— Hero share card ———
+// The screen's centerpiece: a clean, screenshot-friendly Starting XI lineup
+// card in the brand v2 language. Nation lockup, big "STARTING XI" headline,
+// numbered list with a captain badge, and the player's character figure as the
+// visual anchor — designed to read at a glance on social.
+function XIShareCard({ state, nation, captain, matchday, opponent, formation, onShare, copied }) {
+  const xi = useMemo(() => orderXi(state.picks || [], formation), [state.picks, formation]);
+  const capId = state.captainPlus ? null : state.captain;
+  const captainByMd = state.captainPlus ? (state.captainByMd || {}) : {};
+  const slug = nation && window.FIG_SLUG ? window.FIG_SLUG[nation.code] : null;
+  const gender = state.gender || "male";
+  const tone = state.tone || 0;
+  const figSrc =
+    nation && window.figureSrc
+      ? window.figureSrc(nation.code, gender, tone)
+      : null;
+  const figXform =
+    slug && window.figureTransform
+      ? window.figureTransform(slug + "_" + (gender === "female" ? "f" : "m"))
+      : null;
+
+  // The visible "squad number" we print is the formation slot index (1..11),
+  // not a real shirt number — keeps the card readable for any nation without
+  // sourcing real numbers from FIFA.
+  return (
+    <section className="xishare" aria-label="Starting XI share card">
+      <header className="xs-head">
+        <div className="xs-mark" aria-hidden="true">
+          <img src="brand/star-xi-white.png" alt="" />
+        </div>
+        <span className="xs-tournament-pill">World Cup 2026</span>
+      </header>
+
+      <div className="xs-titles">
+        <div className="xs-eyebrow">
+          {nation ? nation.name : "Your Star XI"}
+        </div>
+        <h1 className="xs-title">
+          Starting <span className="xs-title-xi">XI</span>
+        </h1>
+      </div>
+
+      <div className="xs-body">
+        <ol className="xs-lineup">
+          {xi.length === 0 && (
+            <li className="xs-empty">No Star XI picked. Add one to fill this card.</li>
+          )}
+          {xi.map((p, i) => {
+            const isCap = capId === p.id;
+            const mwBadges = [1, 2, 3].filter(mw => captainByMd[mw] === p.id);
+            return (
+              <li key={p.id} className={"xs-row" + (isCap || mwBadges.length ? " is-cap" : "")}>
+                <span className="xs-num">{i + 1}</span>
+                <span className="xs-name">{p.name}</span>
+                {isCap && <span className="xs-cap" title="Captain">C</span>}
+                {mwBadges.map(mw => (
+                  <span key={mw} className="xs-cap" title={`Captain GW${mw}`}>GW{mw}</span>
+                ))}
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className="xs-figure-wrap" aria-hidden="true">
+          {figSrc && (
+            <div className="xs-figure-scaler">
+              <img className="xs-figure" src={figSrc} alt="" style={figXform || undefined} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <footer className="xs-foot">
+        <div className="xs-subs">
+          <div className="xs-subs-label">Formation</div>
+          <div className="xs-subs-list">{formation}</div>
+        </div>
+        {onShare && (
+          <button className="xs-share-btn" onClick={onShare}>
+            {copied ? "✓ Copied!" : "↗ Share XI"}
+          </button>
+        )}
+      </footer>
+    </section>
+  );
+}
+
+// ——— Live Center ———
+// Tournament status + your running total. Pre-launch this is a countdown card
+// with a stat block showing what's at stake; once the group stage starts it
+// flips to a live state with matches-played and the player's running points.
+function LiveCenter({ state, nation, kickoffMs, now, liveResults }) {
+  const ms = Math.max(0, kickoffMs - now);
+  const live = ms === 0;
+  const days = Math.floor(ms / 86400000);
+  const hrs = Math.floor((ms % 86400000) / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+
+  const totalMatches = (window.FIXTURES || []).length || 72;
+  const played = liveResults ? liveResults.played || 0 : 0;
+  const liveNow = liveResults ? liveResults.live || 0 : 0;
+
+  // Pre-knockout the bracket has no actuals yet, so the prediction subtotal
+  // stays at 0. We still tally so the structure is honest: per-XI event totals
+  // also stay 0 until the live feed surfaces player events.
+  const liveSim = useMemo(
+    () => ({
+      results: (liveResults && liveResults.results) || {},
+      bracket: null,
+      playerEvents: null,
+    }),
+    [liveResults]
+  );
+  const tally = useMemo(() => window.tallyUser(state, liveSim), [state, liveSim]);
+
+  return (
+    <section className="live-center" aria-label="Live Center">
+      <div className="lc-head">
+        <h2 className="lc-title">
+          {live ? <span className="lc-livedot" /> : null}
+          Live Center
+        </h2>
+        <div className="lc-sub">
+          {live
+            ? "tournament in progress"
+            : "scoring opens at kickoff · Jun 11, 2026"}
+        </div>
+      </div>
+
+      <div className="lc-grid">
+        <div className="lc-stat lc-stat-hero">
+          <div className="lc-stat-l">Total points</div>
+          <div className="lc-stat-n">{tally.total}</div>
+          <div className="lc-stat-sub">
+            {tally.xiPts} Star XI · {tally.predictionPts} Road
+          </div>
+        </div>
+        <div className="lc-stat">
+          <div className="lc-stat-l">Matches played</div>
+          <div className="lc-stat-n">
+            {played}
+            <em>/{totalMatches}</em>
+          </div>
+          <div className="lc-stat-sub">
+            {liveNow > 0 ? `${liveNow} live now` : "group stage"}
+          </div>
+        </div>
+        <div className="lc-stat">
+          <div className="lc-stat-l">Bullseyes</div>
+          <div className="lc-stat-n">{tally.bullseyes}</div>
+          <div className="lc-stat-sub">perfect groups + champion</div>
+        </div>
+        <div className="lc-stat">
+          <div className="lc-stat-l">
+            {nation ? `${nation.flag} 2× boost` : "Nation boost"}
+          </div>
+          <div className="lc-stat-n">{nation ? "ON" : "—"}</div>
+          <div className="lc-stat-sub">
+            {nation
+              ? "doubles every Road point from your nation"
+              : "pick a nation to enable"}
+          </div>
+        </div>
+      </div>
+
+      {!live ? (
+        <div className="lc-countdown" aria-label="time to kickoff">
+          <span className="lc-cd-lead">Kickoff in</span>
+          <span className="lc-cd-unit">
+            <b>{days}</b>d
+          </span>
+          <span className="lc-cd-unit">
+            <b>{String(hrs).padStart(2, "0")}</b>h
+          </span>
+          <span className="lc-cd-unit">
+            <b>{String(mins).padStart(2, "0")}</b>m
+          </span>
+          <span className="lc-cd-unit">
+            <b>{String(secs).padStart(2, "0")}</b>s
+          </span>
+        </div>
+      ) : (
+        <div className="lc-countdown live">
+          <span className="lc-cd-lead">● matchdays scoring now</span>
+          <span className="lc-cd-tail">updates every 60s</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ——— Leagues preview ———
+// A compact table showing where you sit in a chosen scope (global or one of
+// your private mini-leagues). The full leaderboard screen is one tap away;
+// this block is the "are my friends beating me" glance from home base.
+function LeaguesPreview({ auth, onLeaderboard }) {
+  const [leagues, setLeagues] = useState([]);
+  const [scope, setScope] = useState({ kind: "global", code: null });
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const reqIdRef = useRef(0);
+
+  useEffect(() => {
+    if (!auth.signedIn) {
+      setLeagues([]);
+      return;
+    }
+    if (!window.wcxiLeagues) return;
+    window.wcxiLeagues().then((r) => {
+      setLeagues((r && r.ok && r.leagues) || []);
+    });
+  }, [auth.signedIn]);
+
+  useEffect(() => {
+    if (!auth.signedIn || !window.wcxiLeaderboard) return;
+    const myReq = ++reqIdRef.current;
+    setLoading(true);
+    window
+      .wcxiLeaderboard(
+        scope.kind === "league"
+          ? { code: scope.code, limit: 6 }
+          : { limit: 6 }
+      )
+      .then((r) => {
+        if (myReq !== reqIdRef.current) return;
+        setData(r);
+        setLoading(false);
+      });
+  }, [auth.signedIn, scope]);
+
+  if (!auth.loaded) return null;
+
+  // Signed-out — invite to sign in. Doesn't block the rest of the home base;
+  // the player can still browse their XI + countdown.
+  if (!auth.signedIn) {
+    return (
+      <section className="leagues-card" aria-label="Leagues">
+        <div className="leagues-head">
+          <h2 className="leagues-title">Leagues</h2>
+          <div className="leagues-sub">play your friends</div>
+        </div>
+        <div className="leagues-empty">
+          <p>Sign in to track your rank against friends and start a mini-league.</p>
+          <button
+            className="btn gold sm"
+            onClick={() => window.clerkOpenSignIn && window.clerkOpenSignIn()}
+          >
+            Sign in
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const top = (data && data.top) || [];
+  const you = data && data.you;
+  const youInTop = !!(you && top.some((r) => r.isYou));
+  const softUnconfigured = data && data.configured === false;
+
+  return (
+    <section className="leagues-card" aria-label="Leagues">
+      <div className="leagues-head">
+        <h2 className="leagues-title">Leagues</h2>
+        <button className="leagues-jump" onClick={onLeaderboard}>
+          Full table →
+        </button>
+      </div>
+
+      <div className="leagues-scopes">
+        <button
+          className={"leagues-scope" + (scope.kind === "global" ? " sel" : "")}
+          onClick={() => setScope({ kind: "global", code: null })}
+        >
+          🌍 Global
+        </button>
+        {leagues.map((l) => (
+          <button
+            key={l.code}
+            className={
+              "leagues-scope" +
+              (scope.kind === "league" && scope.code === l.code ? " sel" : "")
+            }
+            onClick={() => setScope({ kind: "league", code: l.code })}
+            title={`${l.memberCount} members`}
+          >
+            {l.name}
+            <small>{l.memberCount}</small>
+          </button>
+        ))}
+        <button
+          className="leagues-scope add"
+          onClick={onLeaderboard}
+          title="Create or join a mini-league"
+        >
+          ＋ League
+        </button>
+      </div>
+
+      {softUnconfigured ? (
+        <div className="leagues-empty">
+          <p>Leaderboards go live at kickoff. Your entry is already saved.</p>
+        </div>
+      ) : loading && !data ? (
+        <div className="leagues-empty">Loading the table…</div>
+      ) : top.length === 0 ? (
+        <div className="leagues-empty">
+          <p>No entries here yet. Be the first to lock one in.</p>
+        </div>
+      ) : (
+        <div className="leagues-rows">
+          {top.slice(0, 5).map((r) => (
+            <div
+              key={r.rank + ":" + r.name}
+              className={"leagues-row" + (r.isYou ? " you" : "")}
+            >
+              <div className="lr-rank">{r.rank}</div>
+              <div className="lr-nm">
+                {r.isYou ? "You" : r.name}
+                <small>
+                  {r.predictionPts ? `+${r.predictionPts} Road` : "Star XI only"}
+                  {r.bullseyes ? ` · ${r.bullseyes} perfect` : ""}
+                </small>
+              </div>
+              <div className="lr-pts">{r.pts}</div>
+            </div>
+          ))}
+          {you && !youInTop && (
+            <>
+              <div className="leagues-gap">⋯</div>
+              <div className="leagues-row you">
+                <div className="lr-rank">{you.rank}</div>
+                <div className="lr-nm">
+                  You
+                  <small>
+                    {you.predictionPts ? `+${you.predictionPts} Road` : "Star XI only"}
+                  </small>
+                </div>
+                <div className="lr-pts">{you.pts}</div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ——— Live / locked screen ———
-// After you submit, your entry is locked in. Real per-matchday scoring is
-// fed in by the backend during the tournament; until kickoff this shows a
-// countdown + your entry summary.
+// After you submit, your entry is locked in. The screen is built around a
+// shareable Starting XI card (the social-media keepsake), a Live Center with
+// running scores + tournament status, and a Leagues preview pulling from the
+// /api leaderboards. The expandable LockedBracket review sits below.
 function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
+  const auth = useClerkAuth();
   const nation = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
-  const predictions = state.predictions || {};
+  const bracket = state.bracket || { groups: {}, advances: { r32:{}, r16:{}, qf:{}, sf:{}, final:{} } };
   const picks = state.picks || [];
   const formation = state.formation || "4-3-3";
-  const predMade = window.FIXTURES.filter(f => {
-    const p = predictions[f.id];
-    return p && p.home != null && p.away != null;
+
+  const GROUP_LETTERS = "ABCDEFGHIJKL".split("");
+  const groupsDone = GROUP_LETTERS.filter(g => {
+    const o = (bracket.groups || {})[g];
+    return o && o.length === 4 && o.every(Boolean);
   }).length;
-  const xiCount = picks.length;
+  const koPickCounts = ["r32", "r16", "qf", "sf", "final"].map(r => {
+    const round = (bracket.advances || {})[r] || {};
+    return Object.keys(round).filter(k => round[k]).length;
+  });
+  const koTotalMade = koPickCounts.reduce((a, c) => a + c, 0);
+  const totalPicks = 48 + 16 + 8 + 4 + 2 + 1;
+  const madePicks =
+    GROUP_LETTERS.reduce((n, g) => n + ((bracket.groups[g] || []).filter(Boolean).length), 0)
+    + koTotalMade;
+
+  const champCode = ((bracket.advances || {}).final || {})[0] || null;
+  const champion = champCode ? window.NATIONS.find(n => n.code === champCode) : null;
+
   const captain = state.captain ? window.PLAYERS.find(p => p.id === state.captain) : null;
-  const boostMatches = nation
-    ? window.FIXTURES.filter(f => f.home.code === nation.code || f.away.code === nation.code).length
-    : 0;
 
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -49,9 +462,10 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
     return () => clearInterval(t);
   }, []);
 
-  // ——— Real live results (prediction layer) ———
-  // Pulls the cached /api/results proxy and maps it onto our fixtures. Degrades
-  // silently to the pre-launch view when /api isn't reachable (local preview).
+  // ——— Real live results ———
+  // Poll the /api/results proxy every 60s; degrades to null when not configured
+  // (local preview / pre-launch). Drives both the Live Center stat block and
+  // the per-nation matchday/opponent shown on the share card.
   const [liveResults, setLiveResults] = useState(null);
   useEffect(() => {
     let alive = true;
@@ -61,74 +475,45 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
       setLiveResults(payload ? window.buildLiveResults(payload) : null);
     };
     pull();
-    const t = setInterval(pull, 60000); // edge-cached, so this is cheap
+    const t = setInterval(pull, 60000);
     return () => { alive = false; clearInterval(t); };
   }, []);
 
-  // Live prediction points so far (real), using the existing scoring rules.
-  const livePred = useMemo(() => {
-    if (!liveResults || !liveResults.ok) return null;
-    let pts = 0, scored = 0, bulls = 0;
-    window.FIXTURES.forEach(fx => {
-      const actual = liveResults.results[fx.id];
-      if (!actual) return;
-      const pred = predictions[fx.id];
-      const isBoost = nation && (fx.home.code === nation.code || fx.away.code === nation.code);
-      const r = window.scoreMatch(pred, actual, isBoost);
-      pts += r.points; scored++; if (r.bullseye) bulls++;
-    });
-    return { pts, scored, bulls, played: liveResults.played, live: liveResults.live };
-  }, [liveResults, predictions, nation]);
+  const matchdayStatus = useMemo(
+    () => nationMatchdayStatus(
+      nation ? nation.code : null,
+      liveResults ? liveResults.statusById : null
+    ),
+    [nation, liveResults]
+  );
 
   const [copied, setCopied] = useState(false);
+  const [roadOpen, setRoadOpen] = useState(false);
 
-  // ——— Local "crowd context" (no backend needed) ———
-  // The template XI = highest-form player per slot for this formation.
-  const templateIds = useMemo(() => {
-    const lim = window.FORMATIONS[formation];
-    const ids = [];
-    ["GK", "DF", "MF", "FW"].forEach(pos => {
-      window.PLAYERS.filter(p => p.pos === pos)
-        .sort((a, b) => b.form - a.form)
-        .slice(0, lim[pos])
-        .forEach(p => ids.push(p.id));
-    });
-    return ids;
-  }, [formation]);
+  // Countdown to kickoff — for the "Edit entry" button label
+  const msToKickoff = Math.max(0, KICKOFF.getTime() - now);
+  const kdDays = Math.floor(msToKickoff / 86400000);
+  const kdHrs  = Math.floor((msToKickoff % 86400000) / 3600000);
+  const kdMins = Math.floor((msToKickoff % 3600000) / 60000);
 
-  const differentials = useMemo(
-    () => picks.filter(id => !templateIds.includes(id))
-      .map(id => window.PLAYERS.find(p => p.id === id)).filter(Boolean),
-    [picks, templateIds]
-  );
-  const templatePct = picks.length ? Math.round((picks.length - differentials.length) / picks.length * 100) : 0;
-
-  // Your boldest predicted upset = lower-ranked side backed to win, biggest gap.
-  const { boldest, upsetCount } = useMemo(() => {
-    let best = null, count = 0;
-    window.FIXTURES.forEach(fx => {
-      const p = predictions[fx.id];
-      if (!p || p.home == null || p.away == null || p.home === p.away) return;
-      const homeWin = p.home > p.away;
-      const winner = homeWin ? fx.home : fx.away;
-      const loser  = homeWin ? fx.away : fx.home;
-      if (winner.rank > loser.rank) {
-        count++;
-        const gap = winner.rank - loser.rank;
-        if (!best || gap > best.gap) best = { winner, loser, gap, score: `${p.home}–${p.away}` };
-      }
-    });
-    return { boldest: best, upsetCount: count };
-  }, [predictions]);
-
+  // Share copy — leads with the nation lockup and lists the XI so the snippet
+  // reads like a genuine team-sheet drop. Mirrors the on-screen share card.
   const buildShare = () => {
-    const capP = captain ? `${captain.flag} ${captain.name}` : "—";
-    const L = ["⚽ My STAR XI '26 entry — locked in"];
-    if (nation) L.push(`${nation.flag} ${nation.name} · 2× boost`);
-    L.push(`${predMade}/72 scores called · Star XI ${formation} (${xiCount}/11)`);
-    L.push(`Captain: ${capP}`);
-    if (boldest) L.push(`Boldest call: ${boldest.winner.flag} ${boldest.winner.name} to beat ${boldest.loser.flag} ${boldest.loser.name}`);
-    L.push("Build yours → starxi.app");
+    const xi = orderXi(picks, formation);
+    const L = [];
+    L.push(`⚽ STAR XI · World Cup 2026 · ${nation ? nation.name : "my squad"} starting XI`);
+    if (matchdayStatus.opponent && nation) {
+      L.push(`Matchday ${matchdayStatus.matchday}: ${nation.code} vs ${matchdayStatus.opponent.code}`);
+    }
+    if (xi.length > 0) {
+      L.push("");
+      xi.forEach((p, i) => {
+        const cap = state.captain === p.id ? "  (C)" : "";
+        L.push(`${i + 1}. ${p.name}${cap}`);
+      });
+    }
+    if (champion) L.push(`\n🏆 Champion: ${champion.flag} ${champion.name}`);
+    L.push("\nBuild yours → starxi.app");
     return L.join("\n");
   };
   const doShare = async () => {
@@ -159,165 +544,101 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
     );
   }
 
-  const ms = Math.max(0, KICKOFF.getTime() - now);
-  const days = Math.floor(ms / 86400000);
-  const hrs  = Math.floor((ms % 86400000) / 3600000);
-  const mins = Math.floor((ms % 3600000) / 60000);
-  const secs = Math.floor((ms % 60000) / 1000);
-  const live = ms === 0;
-  const submittedDate = state.submittedAt
-    ? new Date(state.submittedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
-    : null;
+  const live = now >= KICKOFF.getTime();
 
   return (
     <div className="step-screen">
-      <div className="step-scroll stagger">
-      {/* Locked-in banner + compact countdown strip */}
-      <div className="lockbar">
-        <div className="lockbar-head">
-          <span className="lock-badge">✓ Locked in</span>
-          <strong>{live ? "The tournament is live" : "Your entry is set for the summer"}</strong>
-          {submittedDate && <span className="lock-when">submitted {submittedDate}</span>}
-        </div>
-        {!live ? (
-          <div className="countstrip" aria-label="time to kickoff">
-            <span className="cs-lead">Kickoff</span>
-            <span className="cs-unit"><b>{days}</b>d</span>
-            <span className="cs-unit"><b>{String(hrs).padStart(2,"0")}</b>h</span>
-            <span className="cs-unit"><b>{String(mins).padStart(2,"0")}</b>m</span>
-            <span className="cs-unit"><b>{String(secs).padStart(2,"0")}</b>s</span>
-          </div>
-        ) : (
-          <div className="countstrip live"><span className="cs-lead">● matchdays scoring now</span></div>
-        )}
-      </div>
-
-      <div className="locked-grid">
-        {/* LEFT — your XI, as locked */}
-        <div className="locked-pitch-wrap">
-          <div className="lp-head">
-            <span className="eyebrow">Your Star XI</span>
-            <span className="lp-form">{formation}{xiCount < 11 ? ` · ${xiCount}/11` : ""}</span>
-          </div>
-          {xiCount > 0 ? (
-            <Pitch
-              formation={formation}
-              picks={picks}
-              captain={state.captain}
-              captainPlus={!!state.captainPlus}
-              captainByMd={state.captainByMd || {}}
-              readOnly
+      <div className="step-scroll stagger summary-screen">
+        <div className="live-layout">
+          {/* Left column: Live Center + Leagues + Road opener */}
+          <div className="live-left">
+            <LiveCenter
+              state={state}
+              nation={nation}
+              kickoffMs={KICKOFF.getTime()}
+              now={now}
+              liveResults={liveResults}
             />
-          ) : (
-            <div className="card" style={{ textAlign: "center", padding: 28 }}>
-              <div className="empty-state">No squad locked — your predictions still score on their own.</div>
-              <button className="btn ghost sm" onClick={onEditPicks} style={{ marginTop: 10 }}>Add a Star XI →</button>
-            </div>
-          )}
-          <div className="lp-cap">
-            {captain
-              ? <>★ Captain <strong>{captain.flag} {captain.name}</strong> — scores ×2</>
-              : (state.captainPlus ? "★ Captain+ · rotating per matchday" : "No captain set")}
+            <LeaguesPreview auth={auth} onLeaderboard={onLeaderboard} />
+            {/* Road to the Final — opens as a full-screen modal */}
+            <button className="road-opener" onClick={() => setRoadOpen(true)}>
+              <span className="ro-chev">▸</span>
+              <span className="ro-title">Your Road to the Final</span>
+              <span className="ro-meta">{madePicks}/{totalPicks} picks · tap to review</span>
+            </button>
+          </div>
+          {/* Right column: Starting XI share card */}
+          <div className="live-right">
+            <XIShareCard
+              state={state}
+              nation={nation}
+              captain={captain}
+              formation={formation}
+              matchday={matchdayStatus.matchday}
+              opponent={matchdayStatus.opponent}
+              onShare={doShare}
+              copied={copied}
+            />
           </div>
         </div>
-
-        {/* RIGHT — entry at a glance + crowd context + actions */}
-        <aside className="locked-side">
-          <div className="entry-card">
-            <div className="ec-nation">
-              <span className="ec-flag">{nation ? nation.flag : "🏳️"}</span>
-              <div>
-                <div className="ec-name">{nation ? nation.name : "No nation"}</div>
-                <div className="ec-sub">{nation ? `2× boost on ${boostMatches} matches` : "no boost set"}</div>
-              </div>
-            </div>
-            <div className="ec-stats">
-              <div className="ec-stat">
-                <div className="n">{predMade}<em>/72</em></div>
-                <div className="l">scores called</div>
-              </div>
-              <div className="ec-stat">
-                <div className="n">{xiCount}<em>/11</em></div>
-                <div className="l">squad picked</div>
-              </div>
-              <div className="ec-stat">
-                <div className="n">{upsetCount}</div>
-                <div className="l">upsets backed</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="crowd-card">
-            <div className="cc-title">How your entry stacks up</div>
-            <div className="cc-row">
-              <span className="cc-k">Template-y</span>
-              <div className="cc-meter"><div className="cc-fill" style={{ width: `${templatePct}%` }}></div></div>
-              <span className="cc-v">{templatePct}%</span>
-            </div>
-            <p className="cc-note">
-              {xiCount === 0
-                ? "Pick a Star XI to see how differential your squad is."
-                : differentials.length === 0
-                  ? "Pure chalk — every pick is a popular favourite. Safe, but hard to climb with."
-                  : `${differentials.length} differential${differentials.length > 1 ? "s" : ""}: ${differentials.slice(0, 3).map(p => p.name).join(", ")}${differentials.length > 3 ? "…" : ""}. These are where you beat the crowd.`}
-            </p>
-            {boldest && (
-              <div className="cc-bold">
-                <span className="cc-bold-tag">Boldest call</span>
-                <span>{boldest.winner.flag} <strong>{boldest.winner.name}</strong> {boldest.score} over {boldest.loser.flag} {boldest.loser.name} <i>(#{boldest.winner.rank} vs #{boldest.loser.rank})</i></span>
-              </div>
-            )}
-          </div>
-
-          <p className="locked-foot">
-            Live daily scoring from real results — plus accounts and mini-leagues — land before kickoff.
-            Until then this is your home base: tweak your entry any time before June 11.
-          </p>
-        </aside>
       </div>
 
-      {/* Expandable: every group match with the score you called + live results */}
-      <LockedFixtures
-        predictions={predictions}
-        nationCode={nation ? nation.code : null}
-        live={live}
-        results={liveResults}
-        livePred={livePred}
-      />
-      </div>
       <div className="step-foot">
-        <button className="pill ghost sm" onClick={onEditPicks}>← Edit entry</button>
-        <button className="pill ghost sm" onClick={doShare}>{copied ? "✓ Copied!" : "↗ Share"}</button>
-        <span className="grow"></span>
-        <button className="pill primary" onClick={onLeaderboard}>🏆 Leaderboard <span>→</span></button>
+        <button
+          className={"pill ghost sm" + (live ? " disabled-entry" : "")}
+          onClick={!live ? onEditPicks : undefined}
+          disabled={live}
+          title={live ? "Locked — tournament is live" : "Edit your picks"}
+        >
+          ← Edit entry
+          {!live && (
+            <span className="entry-timer">
+              {kdDays}d {String(kdHrs).padStart(2,"0")}h {String(kdMins).padStart(2,"0")}m
+            </span>
+          )}
+        </button>
       </div>
+
+      {/* Road to the Final — full-screen modal, portalled to body to escape the
+          `transform` on .step-screen which would otherwise confine position:fixed */}
+      {roadOpen && ReactDOM.createPortal(
+        <div className="road-modal-backdrop" onClick={() => setRoadOpen(false)}>
+          <div className="road-modal" onClick={e => e.stopPropagation()}>
+            <div className="road-modal-head">
+              <span className="road-modal-title">Your Road to the Final</span>
+              <span className="road-modal-meta">{madePicks}/{totalPicks} picks</span>
+              <button className="road-modal-x" onClick={() => setRoadOpen(false)}>×</button>
+            </div>
+            <div className="road-modal-body">
+              <LockedBracket
+                bracket={bracket}
+                nationCode={nation ? nation.code : null}
+                live={live}
+                champion={champion}
+                groupsDone={groupsDone}
+                madePicks={madePicks}
+                totalPicks={totalPicks}
+                initialOpen={true}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
 
-// All 72 group matches, collapsed by default. Shows the scoreline you called for
-// each, your nation's 2× boost matches highlighted, and a result column that
-// fills with the REAL scoreline + points you earned once matches kick off.
-// Real data comes from /api/results (football-data.org) via `results`.
-function LockedFixtures({ predictions, nationCode, live, results, livePred }) {
-  const [open, setOpen] = useState(false);
-  const [md, setMd] = useState(0); // 0 = all matchdays
-
-  const fixtures = useMemo(
-    () => (md ? window.FIXTURES.filter(f => f.matchday === md) : window.FIXTURES),
-    [md]
-  );
-  const made = window.FIXTURES.filter(f => {
-    const p = predictions[f.id];
-    return p && p.home != null && p.away != null;
-  }).length;
-
-  const resultsById = results && results.ok ? results.results : null;
-  const statusById = results && results.ok ? results.statusById : null;
-  const hasLive = !!(livePred && (livePred.played + livePred.live) > 0);
-  const headTail = hasLive
-    ? `${livePred.played + livePred.live}/72 played · +${livePred.pts} pts`
-    : `${made}/72 called · results at kickoff`;
+// Your Road to the Final — expandable card on the left panel, full modal via road-opener.
+// In modal mode (initialOpen=true) the toggle is hidden by CSS and content is always shown.
+// Two tabs split Groups+Lucky8 from Knockouts so the modal never needs to scroll far.
+function LockedBracket({ bracket, nationCode, live, champion, groupsDone, madePicks, totalPicks, initialOpen }) {
+  const [open, setOpen] = useState(initialOpen || false);
+  const [tab, setTab] = useState("groups");
+  const GROUP_LETTERS = "ABCDEFGHIJKL".split("");
+  const ROUND_LABELS = window.KO_ROUND_LABELS;
+  const lucky = bracket.lucky3rds || [];
+  const headTail = `${madePicks}/${totalPicks} picks · live scoring at knockouts`;
 
   return (
     <section className="locked-fixtures">
@@ -327,100 +648,197 @@ function LockedFixtures({ predictions, nationCode, live, results, livePred }) {
         aria-expanded={open}
       >
         <span className="lf-chev">{open ? "▾" : "▸"}</span>
-        <span className="lf-toggle-title">
-          {hasLive ? "All 72 matches — your calls & live results" : "All 72 matches & the scores you called"}
-        </span>
+        <span className="lf-toggle-title">Your Road to the Final: groups + knockouts</span>
         <span className="lf-toggle-meta">{headTail}</span>
       </button>
 
       {open && (
         <div className="lf-body">
-          {hasLive && (
-            <div className="lf-live-banner">
-              <span className="lf-live-dot" />
-              <strong>+{livePred.pts}</strong> prediction points so far
-              <i>· {livePred.played} final{livePred.live ? ` · ${livePred.live} in play` : ""} · {livePred.bulls} exact</i>
+          {/* Tab switcher */}
+          <div className="lf-tabs-bar">
+            <button
+              className={"lf-tab" + (tab === "groups" ? " sel" : "")}
+              onClick={() => setTab("groups")}
+            >
+              Groups <span className="lf-tab-count">{groupsDone}/12</span>
+            </button>
+            <button
+              className={"lf-tab" + (tab === "knockouts" ? " sel" : "")}
+              onClick={() => setTab("knockouts")}
+            >
+              Knockouts
+            </button>
+          </div>
+
+          {tab === "groups" && (
+            <>
+          <div className="lb-section">
+            <div className="lb-section-head">Group ladders <span>{groupsDone}/12 set</span></div>
+            <div className="lb-groups">
+              {GROUP_LETTERS.map(g => {
+                const o = (bracket.groups || {})[g] || [];
+                const set = o.filter(Boolean).length === 4;
+                const thirdCode = o[2];
+                const thirdAdvances = thirdCode && lucky.includes(thirdCode);
+                return (
+                  <div key={g} className={"lb-group" + (set ? " done" : "")}>
+                    <div className="lb-group-head">Group {g}</div>
+                    <ol className="lb-group-list">
+                      {[0,1,2,3].map(i => {
+                        const code = o[i];
+                        const team = code && window.NATIONS.find(n => n.code === code);
+                        const mine = team && team.code === nationCode;
+                        // The 3rd-placed slot wears an extra class when the
+                        // player included this team in their Lucky 8.
+                        const luckyHit = i === 2 && team && thirdAdvances;
+                        return (
+                          <li key={i} className={"lb-grp-row" + (i < 2 ? " thru" : "") + (i === 2 ? " wild" : "") + (luckyHit ? " lucky" : "") + (mine ? " mine" : "")}>
+                            <span className="lb-pos">{i+1}</span>
+                            {team ? (
+                              <>
+                                <span className="lb-flag">{team.flag}</span>
+                                <span className="lb-nm">{team.name}</span>
+                              </>
+                            ) : (
+                              <span className="lb-nm empty">—</span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {lucky.length > 0 && (
+            <div className="lb-section">
+              <div className="lb-section-head">Your Lucky 8: 3rds advancing <span>{lucky.length}/8 picked</span></div>
+              <div className="lb-lucky">
+                {lucky.map(code => {
+                  const team = window.NATIONS.find(n => n.code === code);
+                  if (!team) return null;
+                  const mine = team.code === nationCode;
+                  return (
+                    <span key={code} className={"lb-lucky-pill" + (mine ? " mine" : "")}>
+                      <span className="lb-flag">{team.flag}</span>
+                      <span className="lb-nm">{team.name}</span>
+                      <span className="lb-rk">#{team.rank}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+            </>
+          )}
+
+          {tab === "knockouts" && (
+            <>
+          <div className="lb-section">
+            <div className="lb-section-head">Knockout picks</div>
+            <div className="lb-rounds">
+              {["r32","r16","qf","sf","final"].map((round, ri) => {
+                const size = window.KO_ROUND_SIZES[round];
+                const picks = (bracket.advances || {})[round] || {};
+                const prevRound = ["r32","r16","qf","sf","final"][ri - 1];
+                const prevPicks = prevRound ? ((bracket.advances || {})[prevRound] || {}) : null;
+                // For rounds after r32, show H2H matchups derived from previous round's advancers
+                const showH2H = prevPicks !== null;
+                return (
+                  <div key={round} className="lb-round">
+                    <div className="lb-round-head">{ROUND_LABELS[round]}</div>
+                    <div className="lb-round-list">
+                      {showH2H ? (
+                        // Show H2H matchups: prev round pairs → winner highlighted
+                        Array.from({ length: size }).map((_, i) => {
+                          const winnerCode = picks[i];
+                          const winner = winnerCode && window.NATIONS.find(n => n.code === winnerCode);
+                          const teamACode = prevPicks[i * 2];
+                          const teamBCode = prevPicks[i * 2 + 1];
+                          const teamA = teamACode && window.NATIONS.find(n => n.code === teamACode);
+                          const teamB = teamBCode && window.NATIONS.find(n => n.code === teamBCode);
+                          const hasMatchup = teamA || teamB;
+                          return (
+                            <div key={i} className={"lb-matchup" + (hasMatchup ? "" : " empty")}>
+                              {hasMatchup ? (
+                                <>
+                                  <div className={"lb-matchup-team" + (winner && winner.code === teamACode ? " won" : "") + (teamA && teamA.code === nationCode ? " mine" : "")}>
+                                    {teamA ? <><span className="lb-flag">{teamA.flag}</span><span className="lb-nm">{teamA.name}</span></> : <span className="lb-nm empty">—</span>}
+                                  </div>
+                                  <span className="lb-matchup-vs">vs</span>
+                                  <div className={"lb-matchup-team" + (winner && winner.code === teamBCode ? " won" : "") + (teamB && teamB.code === nationCode ? " mine" : "")}>
+                                    {teamB ? <><span className="lb-flag">{teamB.flag}</span><span className="lb-nm">{teamB.name}</span></> : <span className="lb-nm empty">—</span>}
+                                  </div>
+                                </>
+                              ) : (
+                                <span className="lb-nm empty">—</span>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        // r32: flat list of advancing teams
+                        Array.from({ length: size }).map((_, i) => {
+                          const code = picks[i];
+                          const team = code && window.NATIONS.find(n => n.code === code);
+                          const mine = team && team.code === nationCode;
+                          return (
+                            <div key={i} className={"lb-pick" + (team ? " set" : " empty") + (mine ? " mine" : "")}>
+                              {team ? (
+                                <><span className="lb-flag">{team.flag}</span><span className="lb-nm">{team.name}</span></>
+                              ) : (
+                                <span className="lb-nm empty">—</span>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {champion && (
+            <div className={"lb-champion" + (champion.code === nationCode ? " mine" : "")}>
+              <span className="lbc-trophy">🏆</span>
+              <span>Your champion: <strong>{champion.flag} {champion.name}</strong></span>
+              <span className="lbc-pts">+{champion.code === nationCode ? 32 : 16} if they lift it</span>
             </div>
           )}
 
-          <div className="lf-tabs">
-            {[{ k: 0, l: "All 72" }, { k: 1, l: "MD1" }, { k: 2, l: "MD2" }, { k: 3, l: "MD3" }].map(t => (
-              <button
-                key={t.k}
-                className={"md-tab" + (md === t.k ? " sel" : "")}
-                onClick={() => setMd(t.k)}
-                style={{ borderRadius: 999, fontSize: 12, padding: "6px 13px" }}
-              >{t.l}</button>
-            ))}
-          </div>
-
-          <div className="lf-listhead" aria-hidden="true">
-            <span className="lh-match">Match · your call</span>
-            <span className="lh-result">{hasLive ? "Result · pts" : "Kickoff"}</span>
-          </div>
-
-          <div className="lf-list">
-            {fixtures.map(fx => {
-              const p = predictions[fx.id];
-              const has = p && p.home != null && p.away != null;
-              const boost = nationCode && (fx.home.code === nationCode || fx.away.code === nationCode);
-              const actual = resultsById ? resultsById[fx.id] : null;
-              const status = statusById ? statusById[fx.id] : null;
-              const isLiveNow = status === "IN_PLAY" || status === "PAUSED";
-              const score = actual ? window.scoreMatch(p, actual, boost) : null;
-              return (
-                <div key={fx.id} className={"lf-row" + (boost ? " boost" : "") + (has ? "" : " nopred") + (actual ? " hasresult" : "")}>
-                  <span className="lf-grp" title={fx.venue}>
-                    {fx.group}<i>{fx.matchday}</i>{boost && <b className="lf-star">★</b>}
-                  </span>
-                  <span className="lf-team home" title={`#${fx.home.rank}`}>
-                    <span className="nm">{fx.home.name}</span>
-                    <span className="em">{fx.home.flag}</span>
-                  </span>
-                  <span className="lf-score">
-                    {has
-                      ? <><b>{p.home}</b><i>–</i><b>{p.away}</b></>
-                      : <span className="lf-nopred">·&nbsp;·</span>}
-                  </span>
-                  <span className="lf-team away" title={`#${fx.away.rank}`}>
-                    <span className="em">{fx.away.flag}</span>
-                    <span className="nm">{fx.away.name}</span>
-                  </span>
-                  <span className="lf-result">
-                    {actual ? (
-                      <span className="lf-actual">
-                        {isLiveNow && <span className="lf-live-dot sm" title="in play" />}
-                        <b className="lf-rscore">{actual.home}–{actual.away}</b>
-                        {has && score && (
-                          <b className={"lf-pts" + (score.points > 0 ? (score.bullseye ? " bull" : " win") : " zero")}>
-                            {score.bullseye ? "★" : ""}+{score.points}
-                          </b>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="lf-date">{fx.date}</span>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
           <p className="lf-foot">
-            {hasLive
-              ? "Real scorelines from football-data.org — exact score +5 (×2 on ★ your-nation matches), right result +3/+4. Updates every matchday."
-              : "Real scorelines and your points per match appear here once the tournament kicks off on June 11. ★ = your nation's 2× boost matches."}
+            {live
+              ? "Knockout scoring fires when the group stage finishes. Group placings settle, then each round you backed correctly pays out (R16 +1, QF +2, SF +4, Final +8, Champion +16). 2× on your nation."
+              : "Live knockout scoring lands once the group stage ends and the draw is seeded. ★ = your nation. Every Road point you earn from them is doubled."}
           </p>
+            </>
+          )}
         </div>
       )}
     </section>
   );
 }
 
+// MATCH-WATCH (temporary): enable via ?watch=1 in the URL (friendly NOR–SWE test).
+function matchWatchEnabled() {
+  try {
+    return new URLSearchParams(window.location.search).has("watch");
+  } catch (e) {
+    return false;
+  }
+}
+
 function App() {
   const initial = window.loadState();
+  const watchOn = matchWatchEnabled();
   const [state, setState] = useState({ ...DEFAULT_STATE, ...(initial?.state || {}) });
-  const [step, setStep] = useState(initial?.step || "welcome");
+  const [step, setStep] = useState(
+    watchOn ? "matchwatch" : (initial?.step || "welcome")
+  );
 
   useEffect(() => {
     window.saveState({ state, step });
@@ -439,10 +857,10 @@ function App() {
   const doSubmit = () => {
     setState(s => {
       const next = { ...s, submitted: true, submittedAt: s.submittedAt || Date.now() };
-      // Persist to the server (best-effort; localStorage stays the UI's source of
-      // truth, so a failed/unconfigured save never blocks locking in).
+      // displayName: prefer the squad name the player typed, fall back to Clerk identity.
+      const displayName = (s.teamName && s.teamName.trim()) || auth.displayName || null;
       if (window.wcxiSaveEntry) {
-        Promise.resolve().then(() => window.wcxiSaveEntry(next, auth.displayName));
+        Promise.resolve().then(() => window.wcxiSaveEntry(next, displayName));
       }
       return next;
     });
@@ -450,19 +868,39 @@ function App() {
   };
   const submit = () => {
     if (!auth.signedIn) {
-      pendingSubmit.current = true;     // resume the lock-in after sign-in
-      window.clerkOpenSignIn();
+      pendingSubmit.current = true;
+      // Open sign-up: this is the registration moment. Clerk's modal
+      // lets existing users switch to sign-in from within the same flow.
+      window.clerkOpenSignUp ? window.clerkOpenSignUp() : window.clerkOpenSignIn();
       return;
     }
     doSubmit();
   };
   // Finish a deferred lock-in once the player completes the Clerk flow.
+  // Also: if the user signs in and already has a locally-submitted entry,
+  // navigate to live immediately (handles sign-out → sign-in on same device).
   useEffect(() => {
-    if (auth.signedIn && pendingSubmit.current) {
+    if (!auth.signedIn) return;
+    if (pendingSubmit.current) {
       pendingSubmit.current = false;
       doSubmit();
+      return;
+    }
+    if (state.submitted) {
+      goTo("live");
     }
   }, [auth.signedIn]);
+
+  // ——— Sign-out redirect ———
+  // When the user signs out, return them to the landing screen.
+  const wasSignedIn = useRef(null);
+  useEffect(() => {
+    if (!auth.loaded) return;
+    if (wasSignedIn.current === true && !auth.signedIn) {
+      goTo("welcome");
+    }
+    wasSignedIn.current = auth.signedIn;
+  }, [auth.loaded, auth.signedIn]);
 
   // ——— Cross-device hydrate ———
   // When a returning player signs in on a fresh device (no local draft yet),
@@ -482,12 +920,12 @@ function App() {
       const localHasProgress = !!(
         state.nation ||
         (state.picks && state.picks.length) ||
-        (state.predictions && Object.keys(state.predictions).length)
+        (state.bracket && state.bracket.groups && Object.keys(state.bracket.groups).length)
       );
       if (localHasProgress) return;
       setState({
         nation: e.nation != null ? e.nation : null,
-        predictions: e.predictions || {},
+        bracket: e.bracket || emptyBracket(),
         picks: e.picks || [],
         formation: e.formation || "4-3-3",
         captain: e.captain != null ? e.captain : null,
@@ -501,8 +939,10 @@ function App() {
     });
   }, [auth.loaded, auth.signedIn]);
   const reset = () => {
-    if (!confirm("Start over? This wipes your nation, predictions and Star XI.")) return;
-    setState(DEFAULT_STATE);
+    if (!confirm("Start over? This wipes your nation, Road picks and Star XI.")) return;
+    // Re-build a fresh state object (don't reuse DEFAULT_STATE — its nested
+    // `bracket` would otherwise be shared across resets).
+    setState({ ...DEFAULT_STATE, bracket: emptyBracket() });
     goTo("welcome");
   };
 
@@ -510,21 +950,19 @@ function App() {
 
   // The chosen nation's flat colour washes the whole app shell once a nation is
   // locked in — same palette as the welcome carousel, so the brand stays
-  // consistent across steps. The ghost nickname now rides along on every screen.
+  // consistent across steps. The giant ghost nickname only lives on the landing
+  // carousel; inside the flow it would just add noise behind already-busy UI.
   const NATION_BG = window.NATION_BG || {};
-  const NATION_NICK = window.NATION_NICK || {};
   const themed = step !== "welcome" && !!state.nation;
   const nationColor = themed ? (NATION_BG[state.nation] || null) : null;
-  const nationObj = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
-  const ghost = themed
-    ? (NATION_NICK[state.nation] || (nationObj ? nationObj.name.toUpperCase() : null))
-    : null;
+  const ghost = null;
 
   return (
     <div
       className={"app" + (themed ? " themed" : "")}
       style={nationColor ? { "--nation": nationColor } : undefined}
     >
+      <MusicPlayer step={step} />
       {step === "welcome" ? (
         <Welcome
           state={state} setState={setState}
@@ -535,6 +973,7 @@ function App() {
         <StepShell
           step={step} steps={STEPS} currentIdx={currentIdx}
           goTo={goTo} reset={reset} ghost={ghost}
+          matchWatchEnabled={watchOn}
         >
           {step === "dreamxi" && (
             <DreamXI state={state} setState={setState}
@@ -548,7 +987,8 @@ function App() {
           )}
           {step === "confirm" && (
             <Confirm state={state} setState={setState}
-              onSubmit={submit} onBack={() => goTo("predict")} />
+              onSubmit={submit} onBack={() => goTo("predict")}
+              signedIn={auth.signedIn} />
           )}
           {step === "live" && (
             <TournamentLive state={state}
@@ -563,6 +1003,13 @@ function App() {
           )}
           {step === "history" && (
             <History onBack={() => goTo(state.submitted ? "live" : "welcome")} />
+          )}
+          {watchOn && step === "matchwatch" && (
+            <MatchWatch
+              entryState={state}
+              useEntryState={(state.picks || []).length >= 11}
+              onBack={() => goTo(state.submitted ? "live" : "dreamxi")}
+            />
           )}
         </StepShell>
       )}

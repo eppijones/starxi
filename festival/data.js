@@ -1523,6 +1523,119 @@ window.KNOCKOUT_ROUNDS = [
   { name: "Final", dates: "Jul 19 · New York New Jersey Stadium" },
 ];
 
+// ——— Road to the Final · bracket template ———
+// 16 R32 matches. Each entry is [slotA, slotB] where a slot is one of:
+//   A1..L1  group winners       (1st place)
+//   A2..L2  group runners-up    (2nd place)
+//   T1..T8  best 8 third-placed (T1 = highest FIFA rank of the 12 thirds)
+//
+// We don't try to match FIFA's exact bracket allocation — this is a fan pool, not
+// a tournament office. The template is consistent and avoids same-group meetings
+// in R32 between two confirmed seeds (1st/2nd from the same group never collide).
+// Thirds (T1..T8) are placed in 8 of the 16 R32 lanes; the *team* that ends up in
+// a T-slot depends on the player's group picks, so collisions are possible — we
+// accept them rather than running a constraint solver inside the UI.
+window.BRACKET_TEMPLATE = {
+  r32: [
+    ["A1", "T6"], ["C2", "F1"],
+    ["B2", "E1"], ["T3", "D1"],
+    ["G1", "T8"], ["I2", "K1"],
+    ["H2", "F2"], ["T1", "J1"],
+    ["B1", "T7"], ["D2", "E2"],
+    ["A2", "G2"], ["T5", "C1"],
+    ["H1", "T4"], ["J2", "L1"],
+    ["I1", "T2"], ["K2", "L2"],
+  ],
+};
+window.KO_ROUND_KEYS = ["r32", "r16", "qf", "sf", "final"];
+window.KO_ROUND_SIZES = { r32: 16, r16: 8, qf: 4, sf: 2, final: 1 };
+window.KO_ROUND_LABELS = {
+  r32:   "Round of 32",
+  r16:   "Round of 16",
+  qf:    "Quarterfinals",
+  sf:    "Semifinals",
+  final: "Final",
+};
+// Per-round points-per-correct-pick. Doubles each round; champion is the moonshot.
+window.KO_ROUND_PTS = { r32: 1, r16: 2, qf: 4, sf: 8, final: 16 };
+// Group-stage points per team in the right position. Capped at 4/group.
+window.GROUP_POS_PTS = 1;
+
+// Resolve a slot id ("A1", "B2", "T4") into a NATIONS team object, given the
+// player's group picks. Group picks are {A: [1stCode, 2ndCode, 3rdCode, 4thCode]}.
+// T-slots (the 8 best-third positions): prefer the player's explicit Lucky 8
+// pick (`bracket.lucky3rds`) when it's a complete set of 8 codes; otherwise
+// fall back to auto-picking the top 8 by FIFA rank from every set 3rd. The
+// T1..T8 ordering inside whichever pool we use is always FIFA-rank (best first).
+// Returns null when the slot can't be resolved yet.
+window.resolveBracketSlot = function (slotId, bracket) {
+  if (!slotId || !bracket || !bracket.groups) return null;
+  var m1 = /^([A-L])1$/.exec(slotId);
+  if (m1) {
+    var g1 = bracket.groups[m1[1]];
+    var c1 = g1 && g1[0];
+    return c1 ? window.NATIONS.find(function (n) { return n.code === c1; }) || null : null;
+  }
+  var m2 = /^([A-L])2$/.exec(slotId);
+  if (m2) {
+    var g2 = bracket.groups[m2[1]];
+    var c2 = g2 && g2[1];
+    return c2 ? window.NATIONS.find(function (n) { return n.code === c2; }) || null : null;
+  }
+  var mt = /^T([1-8])$/.exec(slotId);
+  if (mt) {
+    var pool = [];
+    if (Array.isArray(bracket.lucky3rds) && bracket.lucky3rds.length === 8) {
+      // Player has explicitly chosen which 3rds advance.
+      bracket.lucky3rds.forEach(function (c) {
+        var team = window.NATIONS.find(function (n) { return n.code === c; });
+        if (team) pool.push(team);
+      });
+    } else {
+      // Auto: every set 3rd-placed team, top 8 by FIFA rank.
+      Object.keys(bracket.groups).forEach(function (g) {
+        var c = bracket.groups[g] && bracket.groups[g][2];
+        var team = c && window.NATIONS.find(function (n) { return n.code === c; });
+        if (team) pool.push(team);
+      });
+      pool.sort(function (a, b) { return a.rank - b.rank; });
+      pool = pool.slice(0, 8);
+    }
+    pool.sort(function (a, b) { return a.rank - b.rank; });
+    var idx = parseInt(mt[1], 10) - 1;
+    return pool[idx] || null;
+  }
+  return null;
+};
+
+// Resolve the two contestants of a knockout match.
+//   round = "r32" | "r16" | "qf" | "sf" | "final"
+//   idx   = match index within the round (0-based)
+// Returns { home, away } as NATIONS objects, or {home:null, away:null} if the
+// player hasn't filled enough picks for them to exist yet.
+window.resolveKoMatch = function (bracket, round, idx) {
+  if (!bracket) return { home: null, away: null };
+  if (round === "r32") {
+    var pair = window.BRACKET_TEMPLATE.r32[idx] || [];
+    return {
+      home: window.resolveBracketSlot(pair[0], bracket),
+      away: window.resolveBracketSlot(pair[1], bracket),
+    };
+  }
+  // R16+ are fed by winners of the previous round (idx*2, idx*2+1).
+  var prev = round === "r16" ? "r32"
+           : round === "qf"  ? "r16"
+           : round === "sf"  ? "qf"
+           :                   "sf";
+  var picks = (bracket.advances && bracket.advances[prev]) || {};
+  var aCode = picks[idx * 2];
+  var bCode = picks[idx * 2 + 1];
+  return {
+    home: aCode ? window.NATIONS.find(function (n) { return n.code === aCode; }) || null : null,
+    away: bCode ? window.NATIONS.find(function (n) { return n.code === bCode; }) || null : null,
+  };
+};
+
 // ——— Past World Cups (history screen) ———
 // Verified from Wikipedia. Hosts of the future tournaments are forward-looking.
 window.PAST_WORLD_CUPS = [

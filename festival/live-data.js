@@ -1,9 +1,13 @@
 // WORLD CUP XI — live results client glue (plain JS, sets globals).
 //
 // Turns the /api/results payload (real football-data.org WC matches) into the
-// `results` map the existing scoring engine already understands:
-//   window.scoreMatch(prediction, actual, isBoost)  expects actual = { home, away }
-//   window.tallyUser(state, sim)                     expects sim.results[fixtureId] = { home, away }
+// `results` map the scoring engine consumes:
+//   window.tallyUser(state, sim)  expects sim.results[fixtureId] = { home, away }
+//
+// Note: the v2 prediction layer (Road to the Final) is scored against
+// sim.bracket, not sim.results — see scoring-core.js → scoreBracket. Per-match
+// results still drive Star XI scoring and feed group-standings derivation when
+// it's time to settle the bracket.
 //
 // The actual payload->fixtures mapping lives in festival/results-map.js
 // (window.buildResultsMap), shared with the server-side leaderboard so the two

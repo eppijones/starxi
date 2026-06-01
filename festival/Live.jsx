@@ -14,8 +14,7 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
   const xiAnim    = window.useCountUp(tally.xiPts, 1000);
   const bullAnim  = window.useCountUp(tally.bullseyes, 800);
 
-  const [sortMode, setSortMode] = useState("points");
-  const [swapOpen, setSwapOpen] = useState(null); // { slotId, atMd, replacementCandidates }
+  const [swapOpen, setSwapOpen] = useState(null);
 
   // Confetti shower on the final-whistle reveal (and on every replay).
   const [confettiRun, setConfettiRun] = useState(true);
@@ -25,12 +24,16 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
     return () => clearTimeout(t);
   }, [sim]);
 
-  const matchRows = useMemo(() => {
-    const rows = [...tally.matchBreakdown];
-    if (sortMode === "points") rows.sort((a, b) => b.points - a.points || a.fx.id - b.fx.id);
-    else rows.sort((a, b) => a.fx.id - b.fx.id);
-    return rows;
-  }, [tally, sortMode]);
+  // Split the flat breakdown back into groups vs knockout rounds for display.
+  const groupRows = (tally.matchBreakdown || []).filter(r => r.kind === "group");
+  const roundRows = (tally.matchBreakdown || []).filter(r => r.kind === "round");
+
+  // The simulated champion — used to celebrate / contrast with the player's pick.
+  const simBracket = sim && sim.bracket;
+  const simChampCode = simBracket && simBracket.advances && simBracket.advances.final && simBracket.advances.final[0];
+  const simChamp = simChampCode ? window.NATIONS.find(n => n.code === simChampCode) : null;
+  const myChampCode = state.bracket && state.bracket.advances && state.bracket.advances.final && state.bracket.advances.final[0];
+  const myChamp = myChampCode ? window.NATIONS.find(n => n.code === myChampCode) : null;
 
   const swapsUsed = (state.swaps || []).length;
   const swapsLeft = window.MAX_SWAPS - swapsUsed;
@@ -60,8 +63,8 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
         <div className="lh-row">
           <div className="lh-stat">
             <div className="n">{predAnim}</div>
-            <div className="l">Prediction points</div>
-            <div className="sub">{tally.outcomesRight} outcomes right of 72</div>
+            <div className="l">Road bonus</div>
+            <div className="sub">{tally.outcomesRight} of 31 advances right</div>
           </div>
           <div className="lh-stat">
             <div className="n">{xiAnim}</div>
@@ -75,7 +78,7 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
           <div className="lh-stat gold">
             <div className="n">{bullAnim}</div>
             <div className="l">Bullseyes</div>
-            <div className="sub">exact scorelines · tiebreaker #2</div>
+            <div className="sub">perfect groups + correct champion</div>
           </div>
           <div className="lh-stat">
             <div className="n">#{you?.rank ?? "—"}</div>
@@ -86,32 +89,55 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
       </div>
 
       <div className="live-grid">
-        {/* LEFT: match list */}
+        {/* LEFT: knockout breakdown */}
         <div>
           <div className="section-head">
-            <h2>Match-by-match</h2>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                className={"md-tab" + (sortMode === "points" ? " sel" : "")}
-                onClick={() => setSortMode("points")}
-                style={{ borderRadius: 999, fontSize: 12, padding: "6px 12px" }}
-              >by points</button>
-              <button
-                className={"md-tab" + (sortMode === "match" ? " sel" : "")}
-                onClick={() => setSortMode("match")}
-                style={{ borderRadius: 999, fontSize: 12, padding: "6px 12px" }}
-              >by fixture</button>
+            <h2>Your Road vs the sim</h2>
+            <div className="meta">
+              {simChamp && <>Sim winner: <strong>{simChamp.flag} {simChamp.name}</strong></>}
             </div>
           </div>
-          <div>
-            {matchRows.slice(0, 24).map(row => (
-              <MatchResultRow key={row.fx.id} row={row} />
-            ))}
-            {matchRows.length > 24 && (
-              <div className="more-tag" style={{ textAlign: "center", padding: "12px 0" }}>
-                + {matchRows.length - 24} more matches scored ↓
-              </div>
-            )}
+
+          {myChamp && simChamp && (
+            <div className={"live-champ-banner" + (myChamp.code === simChamp.code ? " hit" : " miss")}>
+              <span className="lcb-trophy">🏆</span>
+              {myChamp.code === simChamp.code ? (
+                <><strong>{myChamp.flag} {myChamp.name}</strong> lifted it. You called it! <em>+{nation && myChamp.code === nation.code ? 32 : 16} pts</em></>
+              ) : (
+                <>You backed <strong>{myChamp.flag} {myChamp.name}</strong> · the sim crowned <strong>{simChamp.flag} {simChamp.name}</strong></>
+              )}
+            </div>
+          )}
+
+          <div className="bracket-results">
+            <div className="br-section-head">Group ladders</div>
+            <div className="br-groups">
+              {groupRows.map(r => (
+                <div key={r.group} className={"br-grow" + (r.perfect ? " perfect" : "") + (r.hits === 0 ? " zero" : "")}>
+                  <div className="br-grow-head">Group {r.group}</div>
+                  <div className="br-grow-body">
+                    <div className="br-hits">{r.hits}<i>/4</i> right</div>
+                    <div className={"br-pts" + (r.points > 0 ? " win" : " zero") + (r.perfect ? " bull" : "")}>
+                      {r.perfect ? "★ " : ""}+{r.points}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="br-section-head">Knockout rounds</div>
+            <div className="br-rounds">
+              {roundRows.map(r => (
+                <div key={r.round} className={"br-rrow" + (r.hits === 0 ? " zero" : "") + (r.hits === r.total ? " perfect" : "")}>
+                  <div className="br-rrow-name">{window.KO_ROUND_LABELS[r.round]}</div>
+                  <div className="br-rrow-bar">
+                    <div className="br-rrow-fill" style={{ width: `${(r.hits / r.total) * 100}%` }}></div>
+                  </div>
+                  <div className="br-rrow-hits">{r.hits}<i>/{r.total}</i></div>
+                  <div className={"br-pts" + (r.points > 0 ? " win" : " zero")}>+{r.points}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -159,7 +185,7 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
             </div>
             <p className="swap-blurb">
               Three free swaps over the tournament for injured or eliminated picks.
-              Pick a matchday, choose your replacement — points from that MD onwards
+              Pick a matchday, choose your replacement. Points from that MD onwards
               go to the new player.
             </p>
             {swapsUsed > 0 && (
@@ -173,7 +199,7 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
           <div className="card xi-returns" style={{ marginTop: 14 }}>
             <h3>Star XI returns</h3>
             {tally.xiBreakdown.length === 0 && (
-              <div className="empty-state">No Star XI picked — predictions still scoring.</div>
+              <div className="empty-state">No Star XI picked. Predictions still scoring.</div>
             )}
             {tally.xiBreakdown
               .sort((a, b) => b.total - a.total)
@@ -202,7 +228,7 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
                     <div className="md-line-grid">
                       {mdLines.map(line => (
                         <div key={line.md} className={"md-line" + (line.isCap ? " cap" : "")}>
-                          <div className="md-label">MD{line.md}</div>
+                          <div className="md-label">GW{line.md}</div>
                           <div className="md-events">
                             {line.events.goals ? `${line.events.goals}G ` : ""}
                             {line.events.assists ? `${line.events.assists}A ` : ""}
@@ -242,35 +268,6 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
   );
 }
 
-function MatchResultRow({ row }) {
-  const { fx, pred, actual, points, bullseye, isBoost } = row;
-  const predStr = pred && pred.home != null
-    ? `Predicted ${pred.home}–${pred.away}`
-    : "No prediction";
-  return (
-    <div className={"match-row" + (isBoost ? " boost" : "")}>
-      <div className="mt">{fx.group} · MD{fx.matchday}{isBoost ? " · ★ 2×" : ""}</div>
-      <div className="side">
-        <span className="em">{fx.home.flag}</span>
-        <span className="nm">{fx.home.name}</span>
-      </div>
-      <div className="vs">
-        <span>{actual.home}</span>
-        <span className="sep">–</span>
-        <span>{actual.away}</span>
-        <span className="side" style={{ marginLeft: 10 }}>
-          <span className="em">{fx.away.flag}</span>
-          <span className="nm">{fx.away.name}</span>
-        </span>
-      </div>
-      <div className={"pts" + (points === 0 ? " zero" : "") + (bullseye ? " bull" : "")}>
-        {bullseye ? "★ " : ""}+{points}
-      </div>
-      <div className="pred" style={{ gridColumn: "2 / span 2" }}>{predStr}{bullseye && " · BULLSEYE"}</div>
-    </div>
-  );
-}
-
 function SwapModal({ slotId, state, onCancel, onApply }) {
   const cur = window.PLAYERS.find(p => p.id === slotId);
   const [atMd, setAtMd] = useState(2);
@@ -301,7 +298,7 @@ function SwapModal({ slotId, state, onCancel, onApply }) {
               className={"md-tab" + (atMd === md ? " sel" : "")}
               onClick={() => setAtMd(md)}
               style={{ borderRadius: 999, fontSize: 13 }}
-            >From MD{md}</button>
+            >From GW{md}</button>
           ))}
         </div>
 
