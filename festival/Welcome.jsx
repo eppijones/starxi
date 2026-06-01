@@ -395,7 +395,7 @@ function Welcome({ state, setState, onNext, onHistory }) {
         display: "flex", flexDirection: "column", alignItems: "stretch", gap: 9,
         width: "min(330px, 80vw)"
       }}>
-        {selectedNation && (
+        {pickedInSession && selectedNation && (
           <React.Fragment>
             <div style={{
               display: "flex", gap: 6, padding: 6, borderRadius: 999,
@@ -449,7 +449,7 @@ function Welcome({ state, setState, onNext, onHistory }) {
                strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
           </svg>
-          {selectedNation ? "Change nation" : "Pick your nation"}
+          {pickedInSession && selectedNation ? "Change nation" : "Pick your nation"}
         </button>
       </div>
 
