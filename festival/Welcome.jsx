@@ -82,6 +82,10 @@ function Welcome({ state, setState, onNext, onHistory }) {
   const [query, setQuery] = useState("");
   const [pickGender, setPickGender] = useState(state.gender || "male");
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 640);
+  // Autoplay always runs on entry; we only freeze when the player actively
+  // picks a nation from the picker in this session. A persisted nation from
+  // a prior visit doesn't stop the reel — it just colours the action stack.
+  const [pickedInSession, setPickedInSession] = useState(false);
 
   const selectedNation = state.nation; // existing app state — country CODE
 
@@ -100,24 +104,24 @@ function Welcome({ state, setState, onNext, onHistory }) {
     }));
   }, []);
 
-  // autoplay — runs until you pick a nation
+  // Autoplay always runs while the user hasn't actively picked a nation in
+  // this session — so revisits with persisted nation still feel alive.
   useEffect(() => {
-    if (!playing || selectedNation) return;
+    if (!playing || pickedInSession) return;
     const id = setInterval(() => setActiveIndex((p) => (p + 1) % N), AUTOPLAY_MS);
     return () => clearInterval(id);
-  }, [playing, selectedNation, N]);
+  }, [playing, pickedInSession, N]);
 
-  // when a nation is locked in, freeze the carousel on it
+  // When the player actively picks a nation, freeze the reel on it.
   useEffect(() => {
-    if (!selectedNation) return;
+    if (!pickedInSession || !selectedNation) return;
     let idx = DECK.findIndex((d) => d.code === selectedNation && d.gender === pickGender);
     if (idx < 0) {
-      // not in default reel — extend the deck with the picked nation
       idx = DECK.length;
       DECK.push({ code: selectedNation, gender: pickGender });
     }
     setActiveIndex(idx);
-  }, [selectedNation, pickGender, DECK]);
+  }, [pickedInSession, selectedNation, pickGender, DECK]);
 
   // Esc closes the picker and clears the selection
   useEffect(() => {
@@ -147,19 +151,19 @@ function Welcome({ state, setState, onNext, onHistory }) {
     const base = { position: "absolute", aspectRatio: "0.6667 / 1", transition: TR, willChange: "transform, filter, opacity" };
     if (i === center) return { ...base,
       transform: "translateX(-50%) scale(1)", filter: "blur(0px)", opacity: 1, zIndex: 20,
-      left: "50%", height: isMobile ? "74%" : "100%", bottom: isMobile ? "11%" : "0%" };
+      left: "50%", height: isMobile ? "78%" : "94%", bottom: isMobile ? "16%" : "8%" };
     if (i === left) return { ...base,
       transform: "translateX(-50%) scale(1)", filter: "blur(2px)", opacity: 0.6, zIndex: 10,
-      left: isMobile ? "14%" : "22%", height: isMobile ? "20%" : "36%", bottom: isMobile ? "30%" : "6%" };
+      left: isMobile ? "14%" : "22%", height: isMobile ? "20%" : "36%", bottom: isMobile ? "30%" : "14%" };
     if (i === right) return { ...base,
       transform: "translateX(-50%) scale(1)", filter: "blur(2px)", opacity: 0.6, zIndex: 10,
-      left: isMobile ? "86%" : "78%", height: isMobile ? "20%" : "36%", bottom: isMobile ? "30%" : "6%" };
+      left: isMobile ? "86%" : "78%", height: isMobile ? "20%" : "36%", bottom: isMobile ? "30%" : "14%" };
     if (i === back) return { ...base,
       transform: "translateX(-50%) scale(1)", filter: "blur(5px)", opacity: 0.4, zIndex: 5,
-      left: "50%", height: isMobile ? "15%" : "30%", bottom: isMobile ? "30%" : "6%" };
+      left: "50%", height: isMobile ? "15%" : "30%", bottom: isMobile ? "30%" : "14%" };
     return { ...base,
       transform: "translateX(-50%) scale(0.85)", filter: "blur(6px)", opacity: 0, zIndex: 1,
-      left: "50%", height: isMobile ? "14%" : "24%", bottom: isMobile ? "30%" : "6%" };
+      left: "50%", height: isMobile ? "14%" : "24%", bottom: isMobile ? "30%" : "14%" };
   };
 
   const active = DECK[activeIndex] || DECK[0];
@@ -202,6 +206,7 @@ function Welcome({ state, setState, onNext, onHistory }) {
 
   const setNation = (code) => {
     setState((s) => ({ ...s, nation: code, gender: pickGender }));
+    setPickedInSession(true);
     setPickerOpen(false);
   };
   const setGender = (g) => {
@@ -223,10 +228,10 @@ function Welcome({ state, setState, onNext, onHistory }) {
         backgroundImage: `url("${GRAIN}")`, backgroundSize: "200px 200px", backgroundRepeat: "repeat"
       }} />
 
-      {/* ghost nickname */}
+      {/* ghost nickname — vertically centred on the viewport, behind the figure */}
       <div style={{
-        position: "absolute", inset: "0", display: "flex", alignItems: "center", justifyContent: "center",
-        pointerEvents: "none", userSelect: "none", zIndex: 2, top: "10%"
+        position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+        pointerEvents: "none", userSelect: "none", zIndex: 2
       }}>
         <span style={{
           fontFamily: "Anton, sans-serif", fontSize: `${ghostSize}px`, fontWeight: 900,
