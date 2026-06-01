@@ -626,6 +626,7 @@ function App() {
         <History onBack={() => goTo(currentIdx >= 0 ? STEPS[currentIdx]?.id || "welcome" : "welcome")} />
       )}
 
+      {step !== "welcome" && (
       <footer className="site-footer">
         <div className="footer-cols">
           <div>
@@ -657,6 +658,7 @@ function App() {
           Squad data provisional until 1 June 2026 · "World Cup™" is a trademark of FIFA, used here only as a factual descriptor — this is an independent fan project, not affiliated with FIFA.
         </div>
       </footer>
+      )}
     </div>
   );
 }
