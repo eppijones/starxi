@@ -1,0 +1,17 @@
+# Dev tooling — not needed on the CDN
+.agents/
+.claude/
+.cursor/
+scripts/
+
+# Source / reference docs
+brand/
+carachters/
+"STAR XI — Brand & Build Book.pdf"
+MATCH_WATCH_REMOVAL.md
+
+# Config & lock files that aren't served
+skills-lock.json
+.env.example
+.gitignore
+.vercelignore
