@@ -58,6 +58,26 @@ function StepProgress({ steps, currentIdx, step, goTo }) {
 // row inside; the shell guarantees the chrome stays put.
 function StepShell({ step, steps, currentIdx, goTo, reset, ghost, children, matchWatchEnabled }) {
   const isFlow = step !== "history" && step !== "leaderboard" && step !== "matchwatch";
+  const [confirmReset, setConfirmReset] = React.useState(false);
+
+  const handleReset = () => {
+    setConfirmReset(false);
+    reset();
+  };
+
+  // Close confirm popup if user clicks outside it
+  const confirmRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!confirmReset) return;
+    const onDoc = (e) => {
+      if (confirmRef.current && !confirmRef.current.contains(e.target)) {
+        setConfirmReset(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [confirmReset]);
+
   return (
     <div className="step-shell">
       {ghost && (
@@ -77,21 +97,42 @@ function StepShell({ step, steps, currentIdx, goTo, reset, ghost, children, matc
           <button
             className={"shell-util watch" + (step === "matchwatch" ? " on" : "")}
             onClick={() => goTo("matchwatch")}
-            title="NOR vs SWE live scoring test (temporary)"
+            title="Match watch (live scoring test)"
           >📡<span>Match watch</span></button>
         )}
+        {/* Row 1: Leaderboard · Sign In */}
         <button
           className={"shell-util" + (step === "leaderboard" ? " on" : "")}
           onClick={() => goTo("leaderboard")}
           title="Leaderboard & mini-leagues"
         >🏆<span>Leaderboard</span></button>
+
+        <AuthControls />
+
+        {/* Row 2 (wraps on mobile/tablet): Reset · History */}
+        <div className="shell-reset-wrap" ref={confirmRef}>
+          <button
+            className={"shell-util ghost" + (confirmReset ? " on" : "")}
+            onClick={() => setConfirmReset(r => !r)}
+            title="Reset everything"
+            aria-label="Reset"
+          >↺</button>
+          {confirmReset && (
+            <div className="shell-reset-pop" role="dialog" aria-label="Confirm reset">
+              <p>Start over?</p>
+              <div className="srp-btns">
+                <button className="srp-yes" onClick={handleReset}>Yes, reset</button>
+                <button className="srp-no"  onClick={() => setConfirmReset(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <button
-          className={"shell-util" + (step === "history" ? " on" : "")}
+          className={"shell-util shell-util-history" + (step === "history" ? " on" : "")}
           onClick={() => goTo("history")}
           title="World Cup history & records"
         >📖<span>History</span></button>
-        <button className="shell-util ghost" onClick={reset} title="Start over">Reset</button>
-        <AuthControls />
       </div>
 
       <main className="shell-body">{children}</main>

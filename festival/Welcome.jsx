@@ -201,7 +201,7 @@ function LandingTopRight() {
   if (!auth.loaded) return null;
 
   return (
-    <div style={{ position: "absolute", top: 20, right: 16, zIndex: 60, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+    <div style={{ position: "absolute", top: 20, right: 16, zIndex: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
       {auth.signedIn ? (
         <div ref={btnRef} style={{ minWidth: 32, minHeight: 32 }} />
       ) : (
@@ -232,7 +232,8 @@ function LandingTopRight() {
           <span style={{
             color: "rgba(255,255,255,0.45)", fontSize: 9, fontWeight: 600,
             letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap",
-          }}>Already have a team?</span>
+            textAlign: "center",
+          }}>Have a team?</span>
         </React.Fragment>
       )}
     </div>

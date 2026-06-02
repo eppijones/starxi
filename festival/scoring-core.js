@@ -127,14 +127,53 @@
     return out;
   }
 
-  // ——— Star XI per-event scoring (no captain multiplier here) ———
+  // ——— Star XI per-event scoring ———
+  // No captain multiplier here — tallyUser applies it on top.
+  //
+  // Events shape: { goals, assists, sheets, wins, draws, yellows, reds }
+  //
+  // GEM BOOST — lower-rated players earn more on every positive point so picking
+  // a 6.0-rated hidden gem who performs can beat the Star XI:
+  //   form ≥ 8.0  → ×1.0 (no boost)
+  //   form 7.0–7.9 → ×1.3 (Solid Pick)
+  //   form 6.0–6.9 → ×1.5 (Hidden Gem)
+  //   form  < 6.0  → ×2.0 (Wild Card)
+  // The boost multiplies POSITIVE points only; card deductions always sting.
+  var GEM_THRESHOLDS = [
+    { below: 6.0, mult: 2.0 },
+    { below: 7.0, mult: 1.5 },
+    { below: 8.0, mult: 1.3 },
+  ];
+  function gemMult(form) {
+    for (var i = 0; i < GEM_THRESHOLDS.length; i++) {
+      if (form < GEM_THRESHOLDS[i].below) return GEM_THRESHOLDS[i].mult;
+    }
+    return 1.0;
+  }
+
   function scoreEvents(player, events) {
-    var g = events.goals || 0;
-    var a = events.assists || 0;
-    var s = events.sheets || 0;
-    var pts = g * 4 + a * 3;
-    if (player.pos === "GK" || player.pos === "DF") pts += s * 2;
-    return pts;
+    var g  = events.goals   || 0;
+    var a  = events.assists || 0;
+    var s  = events.sheets  || 0;
+    var w  = events.wins    || 0;
+    var d  = events.draws   || 0;
+    var yc = events.yellows || 0;
+    var rc = events.reds    || 0;
+
+    // Positive pts
+    var pos = g * 5 + a * 3;
+    if (player.pos === "GK") pos += s * 6;
+    else if (player.pos === "DF") pos += s * 3;
+    pos += w * 3 + d * 1;
+
+    // Gem boost on positive pts
+    var form = (player && typeof player.form === "number") ? player.form : 8.0;
+    pos = Math.round(pos * gemMult(form));
+
+    // Cards always sting (no boost)
+    var neg = yc * 1 + rc * 3;
+
+    return pos - neg;
   }
 
   // ——— Full per-user tally ———

@@ -76,12 +76,27 @@ function nationMatchdayStatus(code, statusById) {
   };
 }
 
+// Abbreviate to "F. Lastname" style, matching the existing data convention.
+// "James Rodriguez" → "J. Rodriguez"  "Giorgian De Arrascaeta" → "G. De Arrascaeta"
+// Falls back to "F. L." only if "F. Lastname" is still over the hard limit.
+function abbreviateName(name, limit = 13) {
+  if (!name || name.length <= limit) return name;
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  // First pass: abbreviate first name to initial
+  const short = parts[0][0] + ". " + parts.slice(1).join(" ");
+  if (short.length <= limit) return short;
+  // Second pass: also abbreviate last word
+  const shorterParts = [parts[0][0] + "."].concat(parts.slice(1, -1)).concat(parts[parts.length - 1][0] + ".");
+  return shorterParts.join(" ");
+}
+
 // ——— Hero share card ———
 // The screen's centerpiece: a clean, screenshot-friendly Starting XI lineup
 // card in the brand v2 language. Nation lockup, big "STARTING XI" headline,
 // numbered list with a captain badge, and the player's character figure as the
 // visual anchor — designed to read at a glance on social.
-function XIShareCard({ state, nation, captain, matchday, opponent, formation, onShare, copied }) {
+function XIShareCard({ state, nation, captain, matchday, opponent, formation, onShare, shareLoading, cardRef }) {
   const xi = useMemo(() => orderXi(state.picks || [], formation), [state.picks, formation]);
   const capId = state.captainPlus ? null : state.captain;
   const captainByMd = state.captainPlus ? (state.captainByMd || {}) : {};
@@ -100,8 +115,10 @@ function XIShareCard({ state, nation, captain, matchday, opponent, formation, on
   // The visible "squad number" we print is the formation slot index (1..11),
   // not a real shirt number — keeps the card readable for any nation without
   // sourcing real numbers from FIFA.
+  const teamName = (state.teamName && state.teamName.trim()) || null;
+
   return (
-    <section className="xishare" aria-label="Starting XI share card">
+    <section className="xishare" ref={cardRef} aria-label="Starting XI share card">
       <header className="xs-head">
         <div className="xs-mark" aria-hidden="true">
           <img src="brand/star-xi-white.png" alt="" />
@@ -116,6 +133,7 @@ function XIShareCard({ state, nation, captain, matchday, opponent, formation, on
         <h1 className="xs-title">
           Starting <span className="xs-title-xi">XI</span>
         </h1>
+        {teamName && <div className="xs-team-name">{teamName}</div>}
       </div>
 
       <div className="xs-body">
@@ -129,7 +147,7 @@ function XIShareCard({ state, nation, captain, matchday, opponent, formation, on
             return (
               <li key={p.id} className={"xs-row" + (isCap || mwBadges.length ? " is-cap" : "")}>
                 <span className="xs-num">{i + 1}</span>
-                <span className="xs-name">{p.name}</span>
+                <span className="xs-name">{abbreviateName(p.name)}</span>
                 {isCap && <span className="xs-cap" title="Captain">C</span>}
                 {mwBadges.map(mw => (
                   <span key={mw} className="xs-cap" title={`Captain GW${mw}`}>GW{mw}</span>
@@ -154,8 +172,8 @@ function XIShareCard({ state, nation, captain, matchday, opponent, formation, on
           <div className="xs-subs-list">{formation}</div>
         </div>
         {onShare && (
-          <button className="xs-share-btn" onClick={onShare}>
-            {copied ? "✓ Copied!" : "↗ Share XI"}
+          <button className="xs-share-btn" onClick={onShare} disabled={shareLoading}>
+            {shareLoading ? "Saving…" : "↗ Download XI"}
           </button>
         )}
       </footer>
@@ -487,8 +505,9 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
     [nation, liveResults]
   );
 
-  const [copied, setCopied] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
   const [roadOpen, setRoadOpen] = useState(false);
+  const cardRef = React.useRef(null);
 
   // Countdown to kickoff — for the "Edit entry" button label
   const msToKickoff = Math.max(0, KICKOFF.getTime() - now);
@@ -496,35 +515,33 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
   const kdHrs  = Math.floor((msToKickoff % 86400000) / 3600000);
   const kdMins = Math.floor((msToKickoff % 3600000) / 60000);
 
-  // Share copy — leads with the nation lockup and lists the XI so the snippet
-  // reads like a genuine team-sheet drop. Mirrors the on-screen share card.
-  const buildShare = () => {
-    const xi = orderXi(picks, formation);
-    const L = [];
-    L.push(`⚽ STAR XI · World Cup 2026 · ${nation ? nation.name : "my squad"} starting XI`);
-    if (matchdayStatus.opponent && nation) {
-      L.push(`Matchday ${matchdayStatus.matchday}: ${nation.code} vs ${matchdayStatus.opponent.code}`);
-    }
-    if (xi.length > 0) {
-      L.push("");
-      xi.forEach((p, i) => {
-        const cap = state.captain === p.id ? "  (C)" : "";
-        L.push(`${i + 1}. ${p.name}${cap}`);
-      });
-    }
-    if (champion) L.push(`\n🏆 Champion: ${champion.flag} ${champion.name}`);
-    L.push("\nBuild yours → starxi.app");
-    return L.join("\n");
-  };
   const doShare = async () => {
-    const text = buildShare();
+    const el = cardRef.current;
+    if (!el || !window.html2canvas) return;
+    setShareLoading(true);
     try {
-      if (navigator.share) { await navigator.share({ title: "STAR XI", text }); return; }
-    } catch (e) { /* user cancelled */ return; }
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true); setTimeout(() => setCopied(false), 2200);
-    } catch (e) {}
+      // Capture at 4× pixel density for crisp output at any zoom level
+      const raw = await window.html2canvas(el, {
+        scale: 4,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: null,
+        logging: false,
+        ignoreElements: (node) => node.classList && node.classList.contains("xs-share-btn"),
+      });
+
+      // Output at native captured size — no downsampling, maximum quality
+      const dataUrl = raw.toDataURL("image/png");
+      const a = document.createElement("a");
+      const teamSlug = (state.teamName && state.teamName.trim().replace(/\s+/g, "-").toLowerCase()) || "star-xi";
+      a.href = dataUrl;
+      a.download = teamSlug + "-starting-xi.png";
+      a.click();
+    } catch (e) {
+      console.warn("Share image failed:", e);
+    } finally {
+      setShareLoading(false);
+    }
   };
 
   if (!state.submitted) {
@@ -577,7 +594,8 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
               matchday={matchdayStatus.matchday}
               opponent={matchdayStatus.opponent}
               onShare={doShare}
-              copied={copied}
+              shareLoading={shareLoading}
+              cardRef={cardRef}
             />
           </div>
         </div>

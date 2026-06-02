@@ -156,6 +156,63 @@ function Predict({ state, setState, onNext, onBack }) {
     setSub(0);
   };
 
+  // Auto-fill everything: groups by FIFA rank, Lucky-8 by FIFA rank, then all
+  // knockout rounds in order so later rounds resolve against earlier picks.
+  const autoFillAll = () => {
+    writeBracket((b) => {
+      const natByCode = {};
+      window.NATIONS.forEach((n) => { natByCode[n.code] = n; });
+
+      // Fill all 12 groups
+      RTF_GROUP_LETTERS.forEach((letter) => {
+        const teams = window.GROUPS[letter];
+        b.groups[letter] = teams.slice().sort((a, b) => a.rank - b.rank).map((t) => t.code);
+      });
+
+      // Fill Lucky-8: top 8 of all 3rd-placed teams by FIFA rank
+      const thirds = RTF_GROUP_LETTERS
+        .map((g) => b.groups[g] && b.groups[g][2])
+        .filter(Boolean)
+        .map((code) => natByCode[code])
+        .filter(Boolean)
+        .sort((a, b) => a.rank - b.rank)
+        .slice(0, 8);
+      b.lucky3rds = thirds.map((t) => t.code);
+
+      // Fill all knockout rounds
+      ["r32", "r16", "qf", "sf", "final"].forEach((round) => {
+        const slots = round === "final" ? 1 : window.KO_ROUND_SIZES[round];
+        for (let i = 0; i < slots; i++) {
+          const m = window.resolveKoMatch(b, round, i);
+          if (!m || !m.home || !m.away) continue;
+          const homeRank = (natByCode[m.home.code] && natByCode[m.home.code].rank) || 99;
+          const awayRank = (natByCode[m.away.code] && natByCode[m.away.code].rank) || 99;
+          b.advances[round][i] = homeRank <= awayRank ? m.home.code : m.away.code;
+        }
+      });
+    });
+  };
+
+  // Auto-fill all knockout rounds by picking the higher-ranked (lower FIFA rank
+  // number) team in each match. Works in order so later rounds resolve correctly
+  // once earlier picks are in place. Requires groups + Lucky-8 to be done first.
+  const autoFillKnockouts = () => {
+    writeBracket((b) => {
+      const natByCode = {};
+      window.NATIONS.forEach((n) => { natByCode[n.code] = n; });
+      ["r32", "r16", "qf", "sf", "final"].forEach((round) => {
+        const slots = round === "final" ? 1 : window.KO_ROUND_SIZES[round];
+        for (let i = 0; i < slots; i++) {
+          const m = window.resolveKoMatch(b, round, i);
+          if (!m || !m.home || !m.away) continue;
+          const homeRank = (natByCode[m.home.code] && natByCode[m.home.code].rank) || 99;
+          const awayRank = (natByCode[m.away.code] && natByCode[m.away.code].rank) || 99;
+          b.advances[round][i] = homeRank <= awayRank ? m.home.code : m.away.code;
+        }
+      });
+    });
+  };
+
   // ——— Navigation ———
   const groupsCompleted = useMemo(
     () => RTF_GROUP_LETTERS.filter((g) => rtfGroupDone(bracket, g)).length,
@@ -230,23 +287,25 @@ function Predict({ state, setState, onNext, onBack }) {
           </div>
           <div className="rtf-head-actions">
             <button className="btn ghost sm" onClick={() => onNext()}>Skip to confirm</button>
+            <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillAll} title="Auto-rank all groups by FIFA rank, pick the top 8 third-placed teams, and fill every knockout match with the higher-ranked side">
+              ⚡ Auto-fill all
+            </button>
+            {groupsAllDone && luckyDone && (
+              <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillKnockouts} title="Pick the higher-ranked team in every remaining knockout match">
+                ⚡ Auto-fill knockouts
+              </button>
+            )}
             {madePicks > 0 && <button className="btn ghost sm" onClick={clearAll}>Clear</button>}
           </div>
         </div>
 
-        <RtfProgressStrip
-          sub={sub}
-          setSub={setSub}
-          bracket={bracket}
-          groupsAllDone={groupsAllDone}
-          luckyDone={luckyDone}
-        />
-
         <div className="rtf-body" key={sub}>
-          <div className="rtf-subhead">
-            <h3 className="rtf-subtitle">{subTitle}</h3>
-            <span className="rtf-subcount">{subCount}</span>
-          </div>
+          {sub >= 12 && (
+            <div className="rtf-subhead">
+              <h3 className="rtf-subtitle">{subTitle}</h3>
+              <span className="rtf-subcount">{subCount}</span>
+            </div>
+          )}
 
           {sub < 12 ? (
             <GroupBoard
@@ -277,6 +336,14 @@ function Predict({ state, setState, onNext, onBack }) {
             />
           )}
         </div>
+
+        <RtfProgressStrip
+          sub={sub}
+          setSub={setSub}
+          bracket={bracket}
+          groupsAllDone={groupsAllDone}
+          luckyDone={luckyDone}
+        />
       </div>
 
       <div className="step-foot">
@@ -345,27 +412,39 @@ function RtfProgressStrip({ sub, setSub, bracket, groupsAllDone, luckyDone }) {
   );
 }
 
-// ——— Group ladder ———
-// Tap a pool team to seat it in the next empty slot. Tap a placed slot to
-// clear it. Drag a placed slot onto another to swap (or onto an empty slot to
-// move). When three teams are placed, the 4th is dropped in automatically so a
-// single tap finishes the group and the player just hits Next.
+// ——— Group ladder (redesigned: pool on top, solid ladder below) ———
+const RTF_SLOT_META = [
+  { medal: "🥇", rank: "1st", cls: "q1", badge: "through", badgeText: "Through" },
+  { medal: "🥈", rank: "2nd", cls: "q2", badge: "through", badgeText: "Through" },
+  { medal: "🥉", rank: "3rd", cls: "q3", badge: "maybe",   badgeText: "Best-3rd?" },
+  { medal: "▪",  rank: "4th", cls: "q4", badge: "out",     badgeText: "Out" },
+];
+
 function GroupBoard({ letter, teams, ordering, nationCode, onSet }) {
   const [dragFrom, setDragFrom] = useState(null);
   const [dragOver, setDragOver] = useState(null);
 
-  const assigned = new Set((ordering || []).filter(Boolean));
-  const labels = ["1st", "2nd", "3rd", "4th"];
-  const medals = ["🥇", "🥈", "🥉", "·"];
+  const ord = ordering || [null, null, null, null];
+  const assigned = new Set(ord.filter(Boolean));
+  const filled = ord.filter(Boolean).length;
+  const allDone = filled === 4;
+  const nextOpen = ord.indexOf(null);
 
-  const handlePool = (code) => {
+  const teamByCode = (code) => teams.find((t) => t.code === code) || null;
+
+  // last filled index — down-arrow disabled at this position
+  const lastFilledIdx = (() => {
+    let last = 0;
+    ord.forEach((v, i) => { if (v) last = i; });
+    return last;
+  })();
+
+  const seatTeam = (code) => {
     if (assigned.has(code)) return;
-    const next = ordering.slice();
+    const next = ord.slice();
     const idx = next.findIndex((x) => !x);
     if (idx === -1) return;
     next[idx] = code;
-    // Auto-seat the leftover team when only one remains in the pool — saves a
-    // pointless tap on the final card.
     if (next.filter(Boolean).length === 3) {
       const leftover = teams.find((t) => !next.includes(t.code));
       const stillEmpty = next.findIndex((x) => !x);
@@ -374,138 +453,172 @@ function GroupBoard({ letter, teams, ordering, nationCode, onSet }) {
     onSet(next);
   };
 
-  const handleSlot = (i) => {
-    if (!ordering[i]) return;
-    const next = ordering.slice();
+  const clearSlot = (i) => {
+    const next = ord.slice();
     next[i] = null;
     onSet(next);
   };
 
-  const autoRank = () => {
-    const sorted = teams.slice().sort((a, b) => a.rank - b.rank).map((t) => t.code);
-    onSet(sorted);
+  const moveSlot = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j > 3 || !ord[j]) return;
+    const next = ord.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    onSet(next);
   };
 
-  // ——— Drag-drop reorder among the four slots ———
-  const onDragStartSlot = (i, e) => {
-    if (!ordering[i]) return;
+  const autoRank = () => {
+    onSet(teams.slice().sort((a, b) => a.rank - b.rank).map((t) => t.code));
+  };
+
+  const clearAll = () => onSet([null, null, null, null]);
+
+  // drag-drop between filled slots
+  const onDragStart = (i, e) => {
+    if (!ord[i]) return;
     setDragFrom(i);
     e.dataTransfer.effectAllowed = "move";
     try { e.dataTransfer.setData("text/plain", String(i)); } catch (_) {}
   };
-  const onDragOverSlot = (i, e) => {
-    if (dragFrom === null || dragFrom === i) return;
+  const onDragOver = (i, e) => {
+    if (dragFrom === null || dragFrom === i || !ord[i]) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
     if (dragOver !== i) setDragOver(i);
   };
-  const onDropSlot = (i, e) => {
+  const onDrop = (i, e) => {
     e.preventDefault();
     const from = dragFrom;
-    setDragFrom(null);
-    setDragOver(null);
-    if (from === null || from === i) return;
-    const next = ordering.slice();
+    setDragFrom(null); setDragOver(null);
+    if (from === null || from === i || !ord[i]) return;
+    const next = ord.slice();
     [next[from], next[i]] = [next[i], next[from]];
     onSet(next);
   };
-  const onDragEndSlot = () => {
-    setDragFrom(null);
-    setDragOver(null);
-  };
-
-  const teamByCode = (code) => teams.find((t) => t.code === code) || null;
+  const onDragEnd = () => { setDragFrom(null); setDragOver(null); };
 
   return (
     <div className="rtf-group">
-      <div className="rtf-podium">
-        {labels.map((lab, i) => {
-          const code = ordering[i];
-          const team = code && teamByCode(code);
+
+      {/* Group header */}
+      <div className="rtf-grouphead">
+        <div className="rtf-gh-l">
+          <h2 className="rtf-subtitle">Group {letter}</h2>
+          <span className="rtf-subcount">{RTF_GROUP_LETTERS.indexOf(letter) + 1} of 12 · {filled}/4 ranked</span>
+        </div>
+        <div className="rtf-gh-r">
+          <button className="btn ghost sm" onClick={autoRank}>Auto-fill</button>
+          <button className="btn ghost sm" onClick={clearAll} disabled={!filled}>Clear</button>
+        </div>
+      </div>
+
+      {/* ── Pool (on top) ── */}
+      <div className="rtf-poolwrap">
+        <div className="rtf-poolcue">
+          <span className="rtf-poolcue-n">1</span>
+          <span className="rtf-poolcue-t">
+            {allDone
+              ? <><strong>Group ranked.</strong> Use arrows to reorder.</>
+              : <>Tap a team to seat it — the <strong>last team auto-fills</strong></>}
+          </span>
+        </div>
+        <div className={"rtf-pool-top" + (allDone ? " all-done" : "")}>
+          {teams.map((t) => {
+            const seatIdx = ord.indexOf(t.code);
+            const seated = seatIdx >= 0;
+            const mine = t.code === nationCode;
+            return (
+              <button
+                key={t.code}
+                className={"rtf-pchip" + (seated ? " seated" : "") + (mine ? " mine" : "")}
+                onClick={() => seatTeam(t.code)}
+                disabled={seated}
+              >
+                <span className="rtf-pchip-flag">{t.flag}</span>
+                <span className="rtf-pchip-info">
+                  <b>{t.name}</b>
+                  <span>FIFA #{t.rank}</span>
+                </span>
+                {seated && <span className="rtf-pchip-tag">{RTF_SLOT_META[seatIdx].rank}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Ladder (one solid bordered container) ── */}
+      <div className="rtf-ladder">
+        <div className="rtf-ladder-head">
+          <span className="rtf-ladder-title">Final standings</span>
+          <span className="rtf-ladder-legend">
+            <i><b style={{ background: "var(--lime)" }}></b>Through</i>
+            <i><b style={{ background: "var(--gold)" }}></b>Best-3rd</i>
+            <i><b style={{ background: "rgba(255,255,255,0.3)" }}></b>Out</i>
+          </span>
+        </div>
+
+        {ord.map((code, s) => {
+          const m = RTF_SLOT_META[s];
+          const team = code ? teamByCode(code) : null;
           const mine = team && team.code === nationCode;
-          const qualifies = i < 2;        // top 2 always advance
-          const wildcard = i === 2;       // 3rd-placed — Lucky 8 candidate
-          const isDragging = dragFrom === i;
-          const isDropTarget = dragOver === i;
-          const pts = mine ? 2 : 1;
+          const isNext = !team && s === nextOpen;
+          const isLast = s === 3;
+
+          if (!team) {
+            return (
+              <div key={s} className={"rtf-lrow empty " + m.cls + (isNext ? " next" : "")}>
+                <span className="rtf-lrow-rail"></span>
+                <div className="rtf-lrow-pos">
+                  <span className="rtf-lrow-medal">{m.medal}</span>
+                  <span className="rtf-lrow-rank">{m.rank}</span>
+                </div>
+                <div className={"rtf-lrow-drop" + (isLast ? " last" : "")}>
+                  {isNext && !isLast && <span className="rtf-drop-arrow">↑</span>}
+                  {isLast ? "Last seat · auto-fills" : "Tap a team above"}
+                </div>
+              </div>
+            );
+          }
 
           return (
             <div
-              key={i}
-              role="button"
-              tabIndex={team ? 0 : -1}
+              key={s}
               className={
-                "rtf-slot pos-" + (i + 1)
-                + (team ? " filled" : " empty")
-                + (mine ? " mine" : "")
-                + (qualifies ? " qualifies" : "")
-                + (wildcard ? " wildcard" : "")
-                + (isDragging ? " dragging" : "")
-                + (isDropTarget ? " drop-target" : "")
+                "rtf-lrow " + m.cls
+                + (mine ? " austria" : "")
+                + (dragFrom === s ? " dragging" : "")
+                + (dragOver === s ? " drop-target" : "")
               }
-              onClick={() => handleSlot(i)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSlot(i); }
-              }}
-              draggable={!!team}
-              onDragStart={(e) => onDragStartSlot(i, e)}
-              onDragOver={(e) => onDragOverSlot(i, e)}
-              onDrop={(e) => onDropSlot(i, e)}
-              onDragEnd={onDragEndSlot}
-              aria-label={`${lab} place${team ? ": " + team.name : " (empty)"}`}
+              draggable
+              onDragStart={(e) => onDragStart(s, e)}
+              onDragOver={(e) => onDragOver(s, e)}
+              onDrop={(e) => onDrop(s, e)}
+              onDragEnd={onDragEnd}
             >
-              <span className="rtf-pos">
-                <span className="rtf-pos-medal">{medals[i]}</span>
-                <span className="rtf-pos-lab">{lab}</span>
-              </span>
-              {team ? (
-                <>
-                  <span className="rtf-flag">{team.flag}</span>
-                  <div className="rtf-team-meta">
-                    <span className="rtf-name">{team.name}</span>
-                    <span className="rtf-rank">FIFA #{team.rank}</span>
-                  </div>
-                  <span className="rtf-tag">
-                    {qualifies ? "Through" : wildcard ? "Best-3rd?" : "Out"}
-                  </span>
-                  <span className={"rtf-slot-pts" + (mine ? " mine" : "")}>+{pts}</span>
-                  <span className="rtf-x" aria-hidden="true">×</span>
-                </>
-              ) : (
-                <>
-                  <span className="rtf-empty-hint">tap a team below</span>
-                  <span className="rtf-slot-pts ghost">+1</span>
-                </>
-              )}
+              <span className="rtf-lrow-rail"></span>
+              <div className="rtf-lrow-pos">
+                <span className="rtf-lrow-medal">{m.medal}</span>
+                <span className="rtf-lrow-rank">{m.rank}</span>
+              </div>
+              <span className="rtf-lrow-flag">{team.flag}</span>
+              <div className="rtf-lrow-info">
+                <b>{team.name}</b>
+                <span>FIFA #{team.rank}</span>
+              </div>
+              <span className={"rtf-lrow-badge " + m.badge}>{m.badgeText}</span>
+              <span className={"rtf-lrow-pts" + (mine ? " x2" : "")}>{mine ? "×2" : "+1"}</span>
+              <div className="rtf-lrow-ctrls">
+                <button className="rtf-iconbtn" onClick={() => moveSlot(s, -1)} disabled={s === 0} aria-label="Move up">▲</button>
+                <button className="rtf-iconbtn" onClick={() => moveSlot(s, 1)} disabled={s === lastFilledIdx} aria-label="Move down">▼</button>
+                <button className="rtf-iconbtn x" onClick={() => clearSlot(s)} aria-label="Remove">✕</button>
+              </div>
+              <span className="rtf-lrow-grip" aria-hidden="true">⠿</span>
             </div>
           );
         })}
       </div>
 
-      <div className="rtf-pool-head">
-        <span>Tap a team to seat it · drag a slot to reorder · tap a slot to clear</span>
-        <button className="btn ghost sm" onClick={autoRank}>Auto-fill by FIFA rank</button>
-      </div>
-      <div className="rtf-pool">
-        {teams.map((t) => {
-          const used = assigned.has(t.code);
-          const mine = t.code === nationCode;
-          return (
-            <button
-              key={t.code}
-              className={"rtf-pool-team" + (used ? " used" : "") + (mine ? " mine" : "")}
-              onClick={() => handlePool(t.code)}
-              disabled={used}
-            >
-              <span className="rtf-flag">{t.flag}</span>
-              <div className="rtf-team-meta">
-                <span className="rtf-name">{t.name}</span>
-                <span className="rtf-rank">#{t.rank} · {t.star}</span>
-              </div>
-              {mine && <span className="rtf-boost" title="Your nation: every point this team earns is doubled">★ 2×</span>}
-            </button>
-          );
-        })}
+      <div className="rtf-helpline">
+        <b>Tap</b> to seat · <b>▲▼</b> to reorder · <b>✕</b> to clear · drag on desktop
       </div>
     </div>
   );

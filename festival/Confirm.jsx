@@ -3,6 +3,12 @@
 function Confirm({ state, setState, onSubmit, onBack, signedIn }) {
   const teamName = state.teamName || "";
   const setTeamName = (val) => setState(s => ({ ...s, teamName: val }));
+  const [nameError, setNameError] = React.useState(false);
+  const canSubmit = teamName.trim().length >= 3;
+  function handleSubmit() {
+    if (!canSubmit) { setNameError(true); return; }
+    onSubmit();
+  }
   const nation = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
   const bracket = state.bracket || { groups: {}, advances: {} };
   const picks = state.picks || [];
@@ -108,6 +114,14 @@ function Confirm({ state, setState, onSubmit, onBack, signedIn }) {
             </div>
           ) : (
             <div className="rtf-confirm">
+              {champion && (
+                <div className={"rtf-conf-champ" + (nation && champion.code === nation.code ? " mine" : "")}>
+                  <span className="rtfcc-trophy">🏆</span>
+                  <span>Champion: <strong>{champion.flag} {champion.name}</strong></span>
+                  <span className="rtfcc-pts">+{nation && champion.code === nation.code ? 32 : 16} if right</span>
+                </div>
+              )}
+
               <div className="rtf-conf-row">
                 <span className="rtf-conf-label">Groups</span>
                 <div className="rtf-conf-bar">
@@ -144,14 +158,6 @@ function Confirm({ state, setState, onSubmit, onBack, signedIn }) {
                   </div>
                 </div>
               )}
-
-              {champion && (
-                <div className={"rtf-conf-champ" + (nation && champion.code === nation.code ? " mine" : "")}>
-                  <span className="rtfcc-trophy">🏆</span>
-                  <span>Champion: <strong>{champion.flag} {champion.name}</strong></span>
-                  <span className="rtfcc-pts">+{nation && champion.code === nation.code ? 32 : 16} if right</span>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -160,19 +166,22 @@ function Confirm({ state, setState, onSubmit, onBack, signedIn }) {
       </div>
       <div className="confirm-name-row">
         <input
-          className="lb-input confirm-name-input"
+          className={`lb-input confirm-name-input${nameError && !canSubmit ? " input-error" : ""}`}
           type="text"
           maxLength={40}
           placeholder="Name your squad (e.g. Route One Merchants)"
           value={teamName}
-          onChange={e => setTeamName(e.target.value)}
+          onChange={e => { setTeamName(e.target.value); if (nameError) setNameError(false); }}
           aria-label="Squad name"
         />
+        {nameError && !canSubmit && (
+          <p className="confirm-name-error">Squad name must be at least 3 characters.</p>
+        )}
       </div>
       <div className="step-foot">
         <button className="pill ghost sm" onClick={onBack}>← Back</button>
         <span className="foot-note">{signedIn ? "Once you submit, you're in for the summer." : "Sign up to lock in — your picks are already saved."}</span>
-        <button className="pill primary" onClick={onSubmit}>{signedIn ? "✓ Submit — lock in" : "✓ Sign up & lock in"} <span>→</span></button>
+        <button className="pill primary" onClick={handleSubmit} disabled={false}>{signedIn ? "✓ Submit — lock in" : "✓ Sign up & lock in"} <span>→</span></button>
       </div>
     </div>
   );

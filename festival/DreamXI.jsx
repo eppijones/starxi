@@ -215,8 +215,72 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
   // the user can see what's selected without opening the popover.
   const visibleFormations = pinned.includes(formation) ? pinned : [...pinned, formation];
 
+  // Mobile-only: toggle between player list and pitch views.
+  const [mobileView, setMobileView] = useState("list");
+  const [showPoints, setShowPoints] = useState(false);
+
   return (
     <div className="step-screen">
+      {showPoints && (
+        <div className="modal-backdrop" onClick={() => setShowPoints(false)}>
+          <div className="dxi-points-modal" onClick={e => e.stopPropagation()}>
+            <div className="dpm-head">
+              <h3>How Points Work</h3>
+              <button className="modal-x" onClick={() => setShowPoints(false)}>×</button>
+            </div>
+
+            <div className="dpm-body">
+              <p className="dpm-intro">
+                Each match week your Star XI earns points based on what your players do on the pitch.
+                Captain doubles every point earned that week.
+              </p>
+
+              <div className="dpm-section">
+                <div className="dpm-section-title">Per-match events</div>
+                <div className="dpm-rows">
+                  <div className="dpm-row"><span className="dpm-ico">⚽</span><span className="dpm-label">Goal scored</span><span className="dpm-pts">+5</span></div>
+                  <div className="dpm-row"><span className="dpm-ico">🎯</span><span className="dpm-label">Assist</span><span className="dpm-pts">+3</span></div>
+                  <div className="dpm-row"><span className="dpm-ico">🧤</span><span className="dpm-label">Clean sheet (GK)</span><span className="dpm-pts">+6</span></div>
+                  <div className="dpm-row"><span className="dpm-ico">🛡</span><span className="dpm-label">Clean sheet (DF)</span><span className="dpm-pts">+3</span></div>
+                  <div className="dpm-row"><span className="dpm-ico">🏆</span><span className="dpm-label">Team wins &amp; player played</span><span className="dpm-pts">+3</span></div>
+                  <div className="dpm-row"><span className="dpm-ico">🤝</span><span className="dpm-label">Team draws &amp; player played</span><span className="dpm-pts">+1</span></div>
+                  <div className="dpm-row neg"><span className="dpm-ico">🟨</span><span className="dpm-label">Yellow card</span><span className="dpm-pts">−1</span></div>
+                  <div className="dpm-row neg"><span className="dpm-ico">🟥</span><span className="dpm-label">Red card</span><span className="dpm-pts">−3</span></div>
+                  <div className="dpm-row cap"><span className="dpm-ico">⭐</span><span className="dpm-label">Captain armband</span><span className="dpm-pts">×2</span></div>
+                </div>
+              </div>
+
+              <div className="dpm-section dpm-gem-section">
+                <div className="dpm-section-title">💎 Gem Boost — the hidden edge</div>
+                <p className="dpm-gem-intro">
+                  Lower-rated players earn a bonus multiplier on all their <em>positive</em> points.
+                  Pick a hidden gem, captain them, and they can outscore the whole Star XI.
+                </p>
+                <div className="dpm-gem-tiers">
+                  <div className="dpm-tier tier-star"><span className="dpm-tier-label">⭐ 8.0+</span><span className="dpm-tier-name">Star XI</span><span className="dpm-tier-mult">×1</span></div>
+                  <div className="dpm-tier tier-solid"><span className="dpm-tier-label">🔵 7.0–7.9</span><span className="dpm-tier-name">Solid Pick</span><span className="dpm-tier-mult">×1.3</span></div>
+                  <div className="dpm-tier tier-gem"><span className="dpm-tier-label">💎 6.0–6.9</span><span className="dpm-tier-name">Hidden Gem</span><span className="dpm-tier-mult">×1.5</span></div>
+                  <div className="dpm-tier tier-wild"><span className="dpm-tier-label">🃏 &lt;6.0</span><span className="dpm-tier-name">Wild Card</span><span className="dpm-tier-mult">×2.0</span></div>
+                </div>
+                <div className="dpm-example">
+                  <div className="dpm-ex-title">Example — Diney (Cape Verde, rated 6.0) scores a goal:</div>
+                  <div className="dpm-ex-compare">
+                    <div className="dpm-ex-row"><span>Messi scores (9.2)</span><span className="dpm-ex-pts">5 pts</span></div>
+                    <div className="dpm-ex-row gem"><span>Diney scores (6.0) 💎</span><span className="dpm-ex-pts">8 pts</span></div>
+                    <div className="dpm-ex-row gem cap"><span>Diney scores as Captain 💎⭐</span><span className="dpm-ex-pts">16 pts</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <p className="dpm-footer">
+                Cards are never boosted — they sting the same for everyone.
+                Rotate your captain each match week to maximise your edge.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="dxi-screen">
         <header className="dxi-head">
           <div className="ph-titles">
@@ -227,12 +291,25 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
             </p>
           </div>
           <div className="dxi-actions">
+            <button className="btn ghost sm dxi-points-btn" onClick={() => setShowPoints(true)}>Points ?</button>
             <button className="btn ghost sm" onClick={autoFillXI}>Auto-fill XI</button>
             <button className="btn ghost sm" onClick={clearXI}>Clear</button>
           </div>
         </header>
 
-        <div className="dxi-body">
+        {/* Single-column view toggle — hidden only on wide two-column layout (≥980px) */}
+        <div className="dxi-mob-tabs" aria-label="View">
+          <button
+            className={"dxi-mob-tab" + (mobileView === "list" ? " sel" : "")}
+            onClick={() => setMobileView("list")}
+          >Players <span className="pct">{picks.length}/11</span></button>
+          <button
+            className={"dxi-mob-tab" + (mobileView === "pitch" ? " sel" : "")}
+            onClick={() => setMobileView("pitch")}
+          >Your XI {picks.length > 0 ? <span className="pct">{picks.length === 11 ? "✓" : picks.length}</span> : null}</button>
+        </div>
+
+        <div className={"dxi-body mob-" + mobileView}>
           {/* LEFT: position filter + scrollable player list */}
           <section className="dxi-left">
             <div className="dxi-controls">
@@ -312,7 +389,12 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
                       <div className="pc-name">{p.name}</div>
                       <div className="pc-meta">{p.pos} · {p.nat}</div>
                     </div>
-                    <div className="pc-form">{p.form.toFixed(1)}</div>
+                    <div className="pc-right">
+                      <div className="pc-form">{p.form.toFixed(1)}</div>
+                      {!disabled && (
+                        <span className="pc-action">{picked ? "✓" : "+"}</span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -433,16 +515,14 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
 
       <div className="step-foot">
         <button className="pill ghost sm" onClick={onBack}>← Back</button>
-        <div className="foot-meter" title={`${picks.length} of 11 picked`}>
-          <div className="fm-bar"><div className="fm-fill" style={{ width: `${(picks.length / 11) * 100}%` }}></div></div>
-          <div className="fm-count">{picks.length}<em>/11</em> picked</div>
-        </div>
+        <div className="grow" />
         {picks.length < 11 ? (
           <button className="pill primary" disabled>Pick {totalLeft} more</button>
         ) : (
           <>
-            <button className="pill ghost" onClick={onNext}>+ Road to the Final</button>
-            <button className="pill primary" onClick={onSkip}>Review &amp; lock in <span>→</span></button>
+            <button className="pill ghost sm" onClick={onSkip}>Review &amp; lock in</button>
+            <span className="cta-arrows" aria-hidden="true">»</span>
+            <button className="pill primary" onClick={onNext}>+ Road to the Final</button>
           </>
         )}
       </div>
@@ -491,15 +571,7 @@ function Pitch({ formation, picks, onPicksChange, captain, captainPlus, captainB
 
   return (
     <div className={"pitch" + (needsCap ? " needs-cap" : "") + (readOnly ? " read-only" : "")} aria-label={`${formation} pitch with your Star XI`}>
-      <div className="pitch-bg" aria-hidden="true">
-        <div className="pitch-stripe"></div>
-        <div className="pitch-mid-line"></div>
-        <div className="pitch-mid-circle"></div>
-        <div className="pitch-box top"></div>
-        <div className="pitch-box bottom"></div>
-        <div className="pitch-6yd top"></div>
-        <div className="pitch-6yd bottom"></div>
-      </div>
+      <div className="pitch-bg" aria-hidden="true"></div>
 
       <div className="pitch-rows">
         {layout.map(({ pos, n }) => (
@@ -538,6 +610,7 @@ function Pitch({ formation, picks, onPicksChange, captain, captainPlus, captainB
                       onClick={readOnly ? undefined : () => onCaptain(p.id)}
                     >
                       <span className="slot-flag">{p.flag}</span>
+                      <span className="slot-pos-label">{p.pos}</span>
                       {cap && (
                         <span className="cap-mark" aria-label={`MD${capMd} captain`}>
                           {capMd || "★"}
