@@ -3,3 +3,17 @@
 .env*.local
 .DS_Store
 node_modules
+
+# Character source images — WIP/generation dirs (only carachters/FINAL is tracked)
+carachters/AllNationsCharachters_summer_v4/
+carachters/AllNationsCharachters_summer_v4_fixes/
+carachters/VARIANTS/
+carachters/__pycache__/
+carachters/cleanup/
+carachters/generated/
+carachters/logs/
+carachters/scripts/
+carachters/assets/
+
+# Backup dirs
+assets/figures-webp.bak/
