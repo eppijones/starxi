@@ -2544,11 +2544,56 @@ input[type=range].mp-range::-moz-range-thumb {
   }
 }
 @media (max-width: 640px) {
-  /* 2-row topright ends at ~77px on phone; place player just below */
-  .mp-root { top: 88px !important; right: 8px !important; }
+  /* 2-row topright bottoms out at ~93px on phones; place player 10px below */
+  .mp-root { top: 103px !important; right: 14px !important; }
+  .mp-root > div:last-child { gap: 5px !important; }
   .mp-root > div:last-child > button {
-    width: 30px !important;
-    height: 30px !important;
+    width: 32px !important;
+    height: 32px !important;
+  }
+}
+
+/* ——— Auto-hide header chrome on mobile when scrolled ——— */
+/* When the user scrolls the player list / content on a phone, the fixed
+   brand lockup, step tracker and utility cluster slide away so the full
+   screen is usable. They return the moment the user scrolls back to top. */
+@media (max-width: 640px) {
+  .shell-progress,
+  .shell-topright {
+    transition: opacity 0.22s ease, transform 0.22s ease;
+  }
+  .step-shell.is-scrolled .shell-progress {
+    opacity: 0;
+    transform: translateY(-56px);
+    pointer-events: none;
+  }
+  .step-shell.is-scrolled .shell-topright {
+    opacity: 0;
+    transform: translateY(-56px);
+    pointer-events: none;
+  }
+  /* Shrink the brand lockup to a slim strip so content can scroll underneath */
+  .brand-lockup {
+    transition: opacity 0.22s ease, transform 0.22s ease;
+  }
+  .step-shell.is-scrolled .brand-lockup {
+    opacity: 0;
+    transform: translateY(-56px);
+    pointer-events: none;
+  }
+  /* Reduce the gap at the top of shell-body once chrome is hidden */
+  .step-shell.is-scrolled .shell-body {
+    padding-top: 14px;
+    transition: padding-top 0.22s ease;
+  }
+  /* Hide music player (rendered outside step-shell) when scrolled */
+  body.shell-is-scrolled .mp-root {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateY(-56px) !important;
+  }
+  .mp-root {
+    transition: opacity 0.22s ease, transform 0.22s ease;
   }
 }
 
@@ -4573,4 +4618,266 @@ input[type=range].mp-range::-moz-range-thumb {
   .dpm-head { padding: 16px 18px 14px; }
   .dpm-body { padding: 14px 18px 20px; }
   .dpm-gem-tiers { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ——— Leaderboard mode tabs (Combined / Star XI only) ——— */
+.lb-mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--fill-glass);
+  border: 1.5px solid rgba(255,255,255,.18);
+  border-radius: var(--pill);
+  padding: 4px;
+  margin-bottom: 10px;
+  width: fit-content;
+}
+.lb-mode-tab {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255,255,255,.65);
+  font-family: var(--font-display);
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: var(--pill);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  transition: background .15s, color .15s;
+}
+.lb-mode-tab.sel {
+  background: #fff;
+  color: var(--nation, var(--green));
+  font-weight: 700;
+}
+
+/* ——— RTF nudge banner ——— */
+.lb-rtf-nudge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(198,242,78,.12);
+  border: 1.5px solid rgba(198,242,78,.35);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255,255,255,.88);
+}
+.lb-rtf-nudge-icon { font-size: 20px; flex-shrink: 0; }
+
+/* ——— League code reveal after creation ——— */
+.lb-new-code-reveal {
+  margin-top: 14px;
+  padding: 14px;
+  background: rgba(198,242,78,.1);
+  border: 1.5px solid rgba(198,242,78,.35);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.lb-new-code-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .75;
+}
+.lb-new-code-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  appearance: none;
+  cursor: pointer;
+  background: rgba(255,255,255,.12);
+  border: 2px solid rgba(255,255,255,.3);
+  border-radius: 10px;
+  padding: 8px 14px;
+  color: #fff;
+  transition: background .15s, border-color .15s;
+  width: 100%;
+}
+.lb-new-code-btn:hover { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.55); }
+.lb-new-code-btn.copied { border-color: var(--lime); background: rgba(198,242,78,.18); }
+.lb-new-code-val {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  flex: 1;
+}
+.lb-new-code-copy { font-size: 12px; opacity: .7; }
+.lb-new-code-hint { font-size: 12px; opacity: .6; }
+
+/* ——— RTF toggle button in league list ——— */
+.lb-rtf-toggle {
+  appearance: none;
+  cursor: pointer;
+  border: 1.5px solid rgba(255,255,255,.25);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--font-text);
+  font-weight: 700;
+  letter-spacing: .02em;
+  background: transparent;
+  color: rgba(255,255,255,.65);
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.lb-rtf-toggle.on { color: var(--lime); border-color: rgba(198,242,78,.45); background: rgba(198,242,78,.1); }
+.lb-rtf-toggle.off { opacity: .55; }
+.lb-rtf-toggle:hover { opacity: 1; }
+
+/* ——— Points info modal ——— */
+.pts-info-modal {
+  max-width: 500px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.pts-info-sections { display: flex; flex-direction: column; gap: 20px; padding-top: 4px; }
+.pts-info-section { display: flex; flex-direction: column; gap: 8px; }
+.pts-info-heading {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.pts-info-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  font-size: 13.5px;
+}
+.pts-info-grid span:nth-child(even) {
+  text-align: right;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--lime);
+  white-space: nowrap;
+}
+.pts-info-note {
+  font-size: 12px;
+  opacity: .65;
+  line-height: 1.4;
+}
+.pts-info-boards .pts-info-board-note {
+  font-size: 13.5px;
+  margin: 0;
+  line-height: 1.5;
+}
+.pts-info-boards .pts-info-board-note strong { color: var(--gold); }
+
+/* Points info button on Predict/Live */
+.pts-info-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ——— Live hero score split ——— */
+.lh-eyebrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lh-pts-info-btn {
+  appearance: none;
+  cursor: pointer;
+  background: rgba(255,255,255,.12);
+  border: 1.5px solid rgba(255,255,255,.25);
+  border-radius: var(--pill);
+  color: rgba(255,255,255,.75);
+  font-size: 12px;
+  font-family: var(--font-text);
+  font-weight: 700;
+  padding: 4px 10px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  transition: background .15s;
+}
+.lh-pts-info-btn:hover { background: rgba(255,255,255,.2); color: #fff; }
+.lh-score-split {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 14px;
+  flex-wrap: wrap;
+}
+.lh-split-item { display: flex; flex-direction: column; align-items: center; }
+.lh-split-val {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.01em;
+}
+.lh-split-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .6;
+  margin-top: 2px;
+}
+.lh-split-total .lh-split-val { color: var(--gold); }
+.lh-split-sep {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  opacity: .45;
+  margin-top: -8px;
+}
+
+/* ═══════════════════════════════════════════════
+   MOBILE FIXES — group standings table, share card,
+   shell-body padding, foot-meter
+   ═══════════════════════════════════════════════ */
+
+/* Hide the "N/87 picks" count — keep the progress bar only */
+.fm-count { display: none; }
+
+/* ——— Group standings table: more compact on ≤640px ——— */
+/* Tighter rows so all 4 teams fit without heavy scrolling. */
+@media (max-width: 640px) {
+  /* Smaller control buttons — 30px is still tap-friendly */
+  .rtf-iconbtn { width: 30px !important; height: 30px !important; font-size: 11px; }
+  /* Hide the "FIFA #XX" sub-line to give the team name room to breathe */
+  .rtf-lrow-info span { display: none; }
+  /* Slightly smaller rank text and flag to save horizontal space */
+  .rtf-lrow-flag { font-size: 16px; }
+  .rtf-lrow-medal { font-size: 15px; width: 16px; }
+  .rtf-lrow-rank { font-size: 12px; }
+  .rtf-lrow-pos { width: auto; gap: 4px; }
+  /* Row itself: reduce minimum height */
+  .rtf-lrow { min-height: 50px; padding: 8px 10px 8px 12px; gap: 7px; }
+  /* Badge slightly more compact */
+  .rtf-lrow-badge { padding: 4px 7px; font-size: 8px; }
+}
+
+/* ——— Share card (step 05 Live): smaller on mobile so it fits one screen ——— */
+@media (max-width: 640px) {
+  /* Scale the whole card down so the figure + lineup fit on one screen */
+  .xishare {
+    padding: 14px 14px 12px;
+  }
+  .xs-title { font-size: 34px !important; line-height: 0.9; }
+  .xs-titles { margin: 10px 0 10px; }
+  .xs-figure-wrap { min-height: 200px !important; margin: 2px 0 -6px 0; }
+  .xs-figure-scaler { transform: scale(1.1); }
+  .xs-row { padding: 3px 0; gap: 8px; }
+  .xs-num { font-size: 15px; }
+  .xs-name { font-size: 14px !important; }
+  .xs-cap { min-width: 26px; height: 18px; font-size: 9px; padding: 0 4px; }
+  .xs-foot { margin-top: 8px; padding-top: 8px; gap: 8px; }
+  .xs-head { margin-bottom: 0; }
+  .xs-tournament-pill { padding: 5px 12px; font-size: 10px; }
+}
+
+/* ——— Prevent shell-body content from hiding behind tall brand lockup on phone ——— */
+/* The brand lockup + crest totals ~110px tall on phones; bump padding to 130px. */
+@media (max-width: 640px) {
+  .shell-body { padding-top: 130px !important; }
+  .step-shell.is-scrolled .shell-body { padding-top: 14px !important; }
 }

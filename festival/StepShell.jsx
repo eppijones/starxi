@@ -59,6 +59,17 @@ function StepProgress({ steps, currentIdx, step, goTo }) {
 function StepShell({ step, steps, currentIdx, goTo, reset, ghost, children, matchWatchEnabled }) {
   const isFlow = step !== "history" && step !== "leaderboard" && step !== "matchwatch";
   const [confirmReset, setConfirmReset] = React.useState(false);
+  const [scrolled, setScrolled] = React.useState(false);
+
+  const onScrollCapture = React.useCallback((e) => {
+    const el = e.target;
+    // Only react to scrollable content panes, not small nested scrollers
+    if (!el.classList?.contains("step-scroll") && !el.classList?.contains("scroll")) return;
+    const isDown = el.scrollTop > 55;
+    setScrolled(isDown);
+    // also hide music player (rendered outside this tree) via body class
+    document.body.classList.toggle("shell-is-scrolled", isDown);
+  }, []);
 
   const handleReset = () => {
     setConfirmReset(false);
@@ -79,7 +90,7 @@ function StepShell({ step, steps, currentIdx, goTo, reset, ghost, children, matc
   }, [confirmReset]);
 
   return (
-    <div className="step-shell">
+    <div className={"step-shell" + (scrolled ? " is-scrolled" : "")} onScrollCapture={onScrollCapture}>
       {ghost && (
         <div className="shell-ghost" aria-hidden="true">
           <span>{ghost}</span>

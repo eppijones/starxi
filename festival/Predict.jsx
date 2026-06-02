@@ -16,6 +16,60 @@
 // right (doubled if it's the player's home nation). The footer's Back/Next
 // walks the whole flow — users never see a "matchday" tab grid again.
 
+function PointsInfoModal({ onClose }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal pts-info-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>How points work</h3>
+          <button className="modal-x" onClick={onClose}>×</button>
+        </div>
+
+        <div className="pts-info-sections">
+          <div className="pts-info-section">
+            <div className="pts-info-heading">⚽ Star XI</div>
+            <div className="pts-info-grid">
+              <span>Goal</span><span>+5 pts</span>
+              <span>Assist</span><span>+3 pts</span>
+              <span>Clean sheet (GK/DF)</span><span>+6 / +3 pts</span>
+              <span>Win</span><span>+3 pts</span>
+              <span>Draw</span><span>+1 pt</span>
+              <span>Yellow card</span><span>−1 pt</span>
+              <span>Red card</span><span>−3 pts</span>
+              <span>Captain</span><span>×2 multiplier</span>
+            </div>
+            <div className="pts-info-note">Hidden gems (low form rating) earn a ×1.3–×2 boost on positive points.</div>
+          </div>
+
+          <div className="pts-info-section">
+            <div className="pts-info-heading">🗺️ Road to the Final</div>
+            <div className="pts-info-grid">
+              <span>Correct group position</span><span>+1 per team</span>
+              <span>Perfect group</span><span>Bullseye ★</span>
+              <span>R32 team advances</span><span>+1 per pick</span>
+              <span>R16 team advances</span><span>+2 per pick</span>
+              <span>Quarterfinal advance</span><span>+4 per pick</span>
+              <span>Semifinal advance</span><span>+8 per pick</span>
+              <span>Correct champion</span><span>+16 pts + Bullseye ★</span>
+            </div>
+            <div className="pts-info-note">Your home nation earns double Road-to-the-Final points.</div>
+          </div>
+
+          <div className="pts-info-section pts-info-boards">
+            <div className="pts-info-heading">📊 Two leaderboards</div>
+            <p className="pts-info-board-note">
+              <strong>Combined</strong> — XI points + Road points together. The primary global table.
+            </p>
+            <p className="pts-info-board-note">
+              <strong>Star XI only</strong> — ranked purely on your squad's performance. Road picks not counted.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const RTF_GROUP_LETTERS = "ABCDEFGHIJKL".split("");
 const RTF_SUB_COUNT     = 18;     // 12 groups + Lucky 8 + R32 + R16 + QF + SF + Final
 const RTF_LUCKY_SUB     = 12;
@@ -84,6 +138,7 @@ function Predict({ state, setState, onNext, onBack }) {
   const nationObj = nationCode ? window.NATIONS.find((n) => n.code === nationCode) : null;
 
   const [sub, setSub] = useState(() => rtfFindStartSub(bracket));
+  const [ptsInfoOpen, setPtsInfoOpen] = useState(false);
 
   const writeBracket = (mutator) => {
     setState((s) => {
@@ -191,6 +246,7 @@ function Predict({ state, setState, onNext, onBack }) {
         }
       });
     });
+    setSub(RTF_FINAL_SUB);
   };
 
   // Auto-fill all knockout rounds by picking the higher-ranked (lower FIFA rank
@@ -211,6 +267,7 @@ function Predict({ state, setState, onNext, onBack }) {
         }
       });
     });
+    setSub(RTF_FINAL_SUB);
   };
 
   // ——— Navigation ———
@@ -286,6 +343,9 @@ function Predict({ state, setState, onNext, onBack }) {
             </p>
           </div>
           <div className="rtf-head-actions">
+            <button className="btn ghost sm pts-info-btn" onClick={() => setPtsInfoOpen(true)} title="How points work">
+              ℹ Points
+            </button>
             <button className="btn ghost sm" onClick={() => onNext()}>Skip to confirm</button>
             <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillAll} title="Auto-rank all groups by FIFA rank, pick the top 8 third-placed teams, and fill every knockout match with the higher-ranked side">
               ⚡ Auto-fill all
@@ -350,7 +410,6 @@ function Predict({ state, setState, onNext, onBack }) {
         <button className="pill ghost sm" onClick={goPrev}>← Back</button>
         <div className="foot-meter" title={`${madePicks} of ${totalPicks} picks made`}>
           <div className="fm-bar"><div className="fm-fill" style={{ width: `${pct}%` }}></div></div>
-          <div className="fm-count">{madePicks}<em>/{totalPicks}</em> picks</div>
         </div>
         <button
           className="pill primary"
@@ -359,6 +418,8 @@ function Predict({ state, setState, onNext, onBack }) {
           title={nextTitle}
         >{nextLabel}</button>
       </div>
+
+      {ptsInfoOpen && <PointsInfoModal onClose={() => setPtsInfoOpen(false)} />}
     </div>
   );
 }

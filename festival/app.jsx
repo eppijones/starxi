@@ -530,13 +530,25 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
         ignoreElements: (node) => node.classList && node.classList.contains("xs-share-btn"),
       });
 
-      // Output at native captured size — no downsampling, maximum quality
-      const dataUrl = raw.toDataURL("image/png");
-      const a = document.createElement("a");
       const teamSlug = (state.teamName && state.teamName.trim().replace(/\s+/g, "-").toLowerCase()) || "star-xi";
-      a.href = dataUrl;
-      a.download = teamSlug + "-starting-xi.png";
-      a.click();
+      const fileName = teamSlug + "-starting-xi.png";
+
+      // Convert canvas to blob for both share and download paths
+      const blob = await new Promise((res) => raw.toBlob(res, "image/png"));
+      const file = new File([blob], fileName, { type: "image/png" });
+
+      // iOS Safari: use Web Share API with files so user can save to Photos
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "My Star XI" });
+      } else {
+        // Desktop / Android: standard blob download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+      }
     } catch (e) {
       console.warn("Share image failed:", e);
     } finally {
