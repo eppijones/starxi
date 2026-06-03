@@ -201,7 +201,7 @@ function LandingTopRight() {
   if (!auth.loaded) return null;
 
   return (
-    <div style={{ position: "absolute", top: 20, right: 16, zIndex: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+    <div style={{ position: "absolute", top: "calc(20px + env(safe-area-inset-top, 0px))", right: "calc(16px + env(safe-area-inset-right, 0px))", zIndex: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
       {auth.signedIn ? (
         <div ref={btnRef} style={{ minWidth: 32, minHeight: 32 }} />
       ) : (
@@ -617,7 +617,7 @@ function Welcome({ state, setState, onNext, onHistory }) {
 
       {/* bottom-left: nation name + group/fact */}
       <div style={{
-        position: "absolute", bottom: 18, left: 16, zIndex: 60, maxWidth: 540, pointerEvents: "none"
+        position: "absolute", bottom: "calc(18px + env(safe-area-inset-bottom, 0px))", left: "calc(16px + env(safe-area-inset-left, 0px))", zIndex: 60, maxWidth: 540, pointerEvents: "none"
       }}>
         <p style={{
           color: "#fff", margin: 0, marginBottom: 8, fontFamily: "Anton, sans-serif",
@@ -640,7 +640,8 @@ function Welcome({ state, setState, onNext, onHistory }) {
 
       {/* bottom-left actions */}
       <div style={{
-        position: "absolute", left: 16, bottom: isMobile ? 96 : 144, zIndex: 60,
+        position: "absolute", left: "calc(16px + env(safe-area-inset-left, 0px))",
+        bottom: isMobile ? "calc(96px + env(safe-area-inset-bottom, 0px))" : 144, zIndex: 60,
         display: "flex", flexDirection: "column", alignItems: "stretch", gap: 9,
         width: "min(330px, 80vw)"
       }}>

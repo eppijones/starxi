@@ -71,12 +71,15 @@ function MusicPlayer({ step }) {
 
   // Find the topright slot that StepShell renders. When available the two
   // action buttons are portaled there so they share row 2 with History,
-  // giving a consistent 3+3 icon grid on mobile.
+  // giving a consistent 3+3 icon grid on mobile. Re-resolved on every step
+  // change: the app boots on the Welcome screen (no StepShell, no slot), so a
+  // mount-only lookup would never find it once the flow is entered. Cleared to
+  // null on Welcome so the player floats standalone there, as that screen
+  // intends. useLayoutEffect runs before paint to avoid a one-frame flash.
   const [mpSlot, setMpSlot] = useState(null);
-  useEffect(() => {
-    const slot = document.getElementById('shell-mp-slot');
-    setMpSlot(slot || null);
-  }, []);
+  React.useLayoutEffect(() => {
+    setMpSlot(document.getElementById('shell-mp-slot') || null);
+  }, [step]);
 
   // ——— Summary-step: jump to Trophy Parade ———
   // Ref starts null so a fresh mount already on the summary step still fires.

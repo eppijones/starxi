@@ -87,6 +87,10 @@ body {
 .app {
   min-height: 100vh;
   height: 100vh;            /* PROJECT RULE: each screen lives in one viewport */
+  /* dvh tracks the *dynamic* viewport (mobile address-bar collapse/expand) so
+     the pinned Back/Next foot is never pushed under Safari's chrome. Falls
+     back to 100vh on browsers without dvh; identical to vh on desktop. */
+  height: 100dvh;
   overflow: hidden;         /* no page scroll — screens page via Back/Next */
   display: flex;
   flex-direction: column;
@@ -4246,9 +4250,28 @@ input[type=range].mp-range::-moz-range-thumb {
 /* ============================================================ */
 
 /* ——— Safe area insets (iPhone notch / Dynamic Island) ——— */
-/* env() is ignored on browsers that don't support it, so this is safe. */
+/* env() is ignored on browsers that don't support it, so this is safe.
+   These activate now that index.html ships viewport-fit=cover. */
 .step-foot {
   padding-bottom: max(18px, calc(14px + env(safe-area-inset-bottom)));
+}
+/* Landing hero is inline-styled at height:100vh; override to the dynamic
+   viewport on supporting browsers so its bottom CTAs never hide behind the
+   mobile address bar. !important is required to beat the inline style. */
+@supports (height: 100dvh) {
+  .starxi-landing { height: 100dvh !important; }
+}
+/* Fixed top chrome: keep clear of the notch in landscape / standalone.
+   In portrait browser tabs these insets are 0, so desktop & normal mobile
+   are unchanged. */
+.brand-lockup { top: max(14px, env(safe-area-inset-top)); }
+.shell-progress {
+  top: max(20px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+}
+.shell-topright {
+  top: max(18px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
 }
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .shell-body {
@@ -4458,12 +4481,12 @@ input[type=range].mp-range::-moz-range-thumb {
 /* ——— Shell chrome: fine-tune on very small screens ——— */
 @media (max-width: 380px) {
   .shell-body { padding-top: 116px; padding-left: 10px; padding-right: 10px; }
-  .brand-lockup { top: 8px; }
+  .brand-lockup { top: max(8px, env(safe-area-inset-top)); }
   .bl-crest { width: 40px; }
   .bl-name { font-size: 20px; }
   .bl-sub { font-size: 8px; letter-spacing: .18em; }
-  .shell-topright { top: 10px; right: 8px; gap: 4px; }
-  .shell-progress { top: 12px; left: 8px; }
+  .shell-topright { top: max(10px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); gap: 4px; }
+  .shell-progress { top: max(12px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); }
   .shell-util { padding: 6px 7px; }
   .sp-step { padding: 5px 7px; }
 }
