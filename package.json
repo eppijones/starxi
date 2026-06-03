@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "STAR XI — serverless API (entries, leaderboards). The site itself is buildless static; this package.json exists only to give the /api functions their dependencies.",
   "dependencies": {
-    "@clerk/backend": "^3.4.14"
+    "@clerk/backend": "^3.4.14",
+    "@vercel/speed-insights": "^2.0.0"
   }
 }
