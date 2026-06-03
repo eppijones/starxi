@@ -55,6 +55,7 @@
     const qs = [];
     if (opts.code) qs.push("code=" + encodeURIComponent(opts.code));
     if (opts.limit) qs.push("limit=" + encodeURIComponent(opts.limit));
+    if (opts.mode) qs.push("mode=" + encodeURIComponent(opts.mode));
     const url = "/api/leaderboard" + (qs.length ? "?" + qs.join("&") : "");
     try {
       const r = await authedFetch(url, { method: "GET" });
@@ -97,6 +98,7 @@
   const wcxiCreateLeague = (name) => wcxiLeagueAction("create", { name: name });
   const wcxiJoinLeague = (code) => wcxiLeagueAction("join", { code: code });
   const wcxiLeaveLeague = (code) => wcxiLeagueAction("leave", { code: code });
+  const wcxiToggleLeagueRtf = (code) => wcxiLeagueAction("toggleRtf", { code: code });
 
   Object.assign(window, {
     wcxiSaveEntry,
@@ -106,5 +108,6 @@
     wcxiCreateLeague,
     wcxiJoinLeague,
     wcxiLeaveLeague,
+    wcxiToggleLeagueRtf,
   });
 })();

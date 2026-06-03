@@ -83,7 +83,13 @@ async function createLeague(uid, name) {
     }
   }
   if (!code) code = randomCode(6); // fall back to a longer code space
-  const meta = { code, name: cleanName(name), ownerId: uid, createdAt: Date.now() };
+  const meta = {
+    code,
+    name: cleanName(name),
+    ownerId: uid,
+    createdAt: Date.now(),
+    roadToFinalEnabled: true,
+  };
   await kvSet(META(code), JSON.stringify(meta));
   await kvSadd(MEMBERS(code), uid);
   await kvSadd(USER_LEAGUES(uid), code);
@@ -107,7 +113,13 @@ module.exports = async (req, res) => {
       const memberCount = await kvScard(MEMBERS(code));
       return json(res, 200, {
         ok: true,
-        league: { code, name: meta.name, ownerId: meta.ownerId, memberCount },
+        league: {
+          code,
+          name: meta.name,
+          ownerId: meta.ownerId,
+          memberCount,
+          roadToFinalEnabled: meta.roadToFinalEnabled !== false,
+        },
       });
     }
     // List the caller's leagues.
@@ -122,6 +134,7 @@ module.exports = async (req, res) => {
         name: meta.name,
         memberCount,
         owner: meta.ownerId === uid,
+        roadToFinalEnabled: meta.roadToFinalEnabled !== false,
       });
     }
     leagues.sort((a, b) => b.memberCount - a.memberCount);
@@ -134,7 +147,23 @@ module.exports = async (req, res) => {
 
     if (action === "create") {
       const meta = await createLeague(uid, body.name);
-      return json(res, 200, { ok: true, code: meta.code, name: meta.name });
+      return json(res, 200, {
+        ok: true,
+        code: meta.code,
+        name: meta.name,
+        roadToFinalEnabled: meta.roadToFinalEnabled,
+      });
+    }
+
+    if (action === "toggleRtf") {
+      const code = normalizeCode(body.code);
+      if (!code) return json(res, 400, { ok: false, error: "bad_code" });
+      const meta = safeParse(await kvGet(META(code)));
+      if (!meta) return json(res, 404, { ok: false, error: "no_such_league" });
+      if (meta.ownerId !== uid) return json(res, 403, { ok: false, error: "not_owner" });
+      meta.roadToFinalEnabled = !meta.roadToFinalEnabled;
+      await kvSet(META(code), JSON.stringify(meta));
+      return json(res, 200, { ok: true, code, roadToFinalEnabled: meta.roadToFinalEnabled });
     }
 
     if (action === "join") {

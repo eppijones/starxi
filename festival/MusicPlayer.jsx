@@ -69,6 +69,15 @@ function MusicPlayer({ step }) {
   // "you can mute here." Stops pulsing after first interaction.
   const [muteHinted, setMuteHinted] = useState(false);
 
+  // Find the topright slot that StepShell renders. When available the two
+  // action buttons are portaled there so they share row 2 with History,
+  // giving a consistent 3+3 icon grid on mobile.
+  const [mpSlot, setMpSlot] = useState(null);
+  useEffect(() => {
+    const slot = document.getElementById('shell-mp-slot');
+    setMpSlot(slot || null);
+  }, []);
+
   // ——— Summary-step: jump to Trophy Parade ———
   // Ref starts null so a fresh mount already on the summary step still fires.
   const prevStep = useRef(null);
@@ -215,8 +224,32 @@ function MusicPlayer({ step }) {
   const musicIconPulse = !engaged && !open;
   const muteBtnPulse   = playing && !muteHinted;
 
+  // Two compact shell-util buttons portaled into #shell-mp-slot on mobile.
+  const slotButtons = (
+    <>
+      <button
+        className="shell-util shell-util-music"
+        onClick={() => { if (!engaged) play(); setOpen(o => !o); }}
+        title="Music player"
+        aria-label="Music player"
+        aria-expanded={open}
+      >
+        {playing && !muted ? <MpEq playing={true} h={14} /> : MP_ICO.note(16)}
+      </button>
+      <button
+        className={"shell-util shell-util-mute" + (muted ? " on" : "")}
+        onClick={toggleMute}
+        title={muted ? "Unmute" : "Mute"}
+        aria-label={muted ? "Unmute" : "Mute"}
+      >
+        {muted ? MP_ICO.mute(16) : MP_ICO.vol(16)}
+      </button>
+    </>
+  );
+
   return (
-    <div className="mp-root" style={{
+    <>
+    <div className={"mp-root" + (mpSlot ? " mp-has-slot" : "")} style={{
       position: "fixed", right: 28, bottom: 18, zIndex: 80,
       display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12,
     }}>
@@ -317,6 +350,8 @@ function MusicPlayer({ step }) {
         </button>
       </div>
     </div>
+    {mpSlot && ReactDOM.createPortal(slotButtons, mpSlot)}
+    </>
   );
 }
 

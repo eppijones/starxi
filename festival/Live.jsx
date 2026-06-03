@@ -1,5 +1,59 @@
 // DREAM XI '26 — Screen 5: Live (post-simulation)
 
+function LivePointsModal({ onClose }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal pts-info-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>How points work</h3>
+          <button className="modal-x" onClick={onClose}>×</button>
+        </div>
+
+        <div className="pts-info-sections">
+          <div className="pts-info-section">
+            <div className="pts-info-heading">⚽ Star XI</div>
+            <div className="pts-info-grid">
+              <span>Goal</span><span>+5 pts</span>
+              <span>Assist</span><span>+3 pts</span>
+              <span>Clean sheet (GK/DF)</span><span>+6 / +3 pts</span>
+              <span>Win</span><span>+3 pts</span>
+              <span>Draw</span><span>+1 pt</span>
+              <span>Yellow card</span><span>−1 pt</span>
+              <span>Red card</span><span>−3 pts</span>
+              <span>Captain</span><span>×2 multiplier</span>
+            </div>
+            <div className="pts-info-note">Hidden gems (low form rating) earn a ×1.3–×2 boost on positive points.</div>
+          </div>
+
+          <div className="pts-info-section">
+            <div className="pts-info-heading">🗺️ Road to the Final</div>
+            <div className="pts-info-grid">
+              <span>Correct group position</span><span>+1 per team</span>
+              <span>Perfect group</span><span>Bullseye ★</span>
+              <span>R32 team advances</span><span>+1 per pick</span>
+              <span>R16 team advances</span><span>+2 per pick</span>
+              <span>Quarterfinal advance</span><span>+4 per pick</span>
+              <span>Semifinal advance</span><span>+8 per pick</span>
+              <span>Correct champion</span><span>+16 pts + Bullseye ★</span>
+            </div>
+            <div className="pts-info-note">Your home nation earns double Road-to-the-Final points.</div>
+          </div>
+
+          <div className="pts-info-section pts-info-boards">
+            <div className="pts-info-heading">📊 Two leaderboards</div>
+            <p className="pts-info-board-note">
+              <strong>Combined</strong> — XI points + Road points together. The primary global table.
+            </p>
+            <p className="pts-info-board-note">
+              <strong>Star XI only</strong> — ranked purely on your squad's performance. Road picks not counted.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
   const nation = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
   const tally = useMemo(() => window.tallyUser(state, sim), [state, sim]);
@@ -15,6 +69,7 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
   const bullAnim  = window.useCountUp(tally.bullseyes, 800);
 
   const [swapOpen, setSwapOpen] = useState(null);
+  const [ptsInfoOpen, setPtsInfoOpen] = useState(false);
 
   // Confetti shower on the final-whistle reveal (and on every replay).
   const [confettiRun, setConfettiRun] = useState(true);
@@ -54,12 +109,40 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
     <div className="screen stagger">
       {confettiRun && <window.ConfettiBurst key={state && sim ? "c" + (you?.pts || 0) : "c"} run={confettiRun} />}
       <div className="live-hero pop">
-        <div className="lh-eyebrow">Final whistle · group stage</div>
+        <div className="lh-eyebrow">
+          Final whistle · group stage
+          <button
+            className="lh-pts-info-btn"
+            onClick={() => setPtsInfoOpen(true)}
+            title="How points work"
+          >ℹ Points</button>
+        </div>
+
+        {/* Combined score — primary headline */}
         <div className="lh-score">
           {nation && <span className="lh-flag">{nation.flag}</span>}
           {totalAnim}
-          <span style={{ fontSize: ".25em", opacity: .45, marginLeft: 12, verticalAlign: "0.4em" }}>pts</span>
+          <span style={{ fontSize: ".25em", opacity: .45, marginLeft: 12, verticalAlign: "0.4em" }}>pts combined</span>
         </div>
+
+        {/* Score split: Star XI only vs Combined */}
+        <div className="lh-score-split">
+          <div className="lh-split-item">
+            <span className="lh-split-val">{tally.xiPts}</span>
+            <span className="lh-split-label">Star XI only</span>
+          </div>
+          <span className="lh-split-sep">+</span>
+          <div className="lh-split-item">
+            <span className="lh-split-val">{tally.predictionPts}</span>
+            <span className="lh-split-label">Road bonus</span>
+          </div>
+          <span className="lh-split-sep">=</span>
+          <div className="lh-split-item lh-split-total">
+            <span className="lh-split-val">{tally.total}</span>
+            <span className="lh-split-label">Combined</span>
+          </div>
+        </div>
+
         <div className="lh-row">
           <div className="lh-stat">
             <div className="n">{predAnim}</div>
@@ -264,6 +347,8 @@ function Live({ state, sim, setState, onReplay, onEditPicks, onHistory }) {
           onApply={(atMd, newId) => applySwap(swapOpen.slotId, atMd, newId)}
         />
       )}
+
+      {ptsInfoOpen && <LivePointsModal onClose={() => setPtsInfoOpen(false)} />}
     </div>
   );
 }

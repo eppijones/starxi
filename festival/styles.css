@@ -2495,7 +2495,9 @@ h3.subtitle {
   .shell-util { padding: 7px 9px; }
   .bl-name { font-size: 22px; }
   .bl-sub { font-size: 9px; letter-spacing: .2em; }
-  .shell-body { padding: 116px 14px 0; }
+  /* Brand lockup extends to ~100px; 2-row topright to ~91px. 128px gives a
+     comfortable 28px gap between chrome and the first line of screen content. */
+  .shell-body { padding: 128px 14px 0; }
 }
 
 /* ——— Global music player (bottom-right) ——— */
@@ -2527,30 +2529,48 @@ input[type=range].mp-range::-moz-range-thumb {
 }
 
 /* ——— Music player: top-right corner on mobile/tablet ——— */
-/* Sits below the 2-row utility cluster (Leaderboard+Reset+SignIn / History).
-   column-reverse keeps controls at the top anchor; panel opens downward. */
+/* On tablet (≤768px) the standalone buttons move below the 2-row topright.
+   On mobile (≤640px) the buttons are portaled into #shell-mp-slot instead;
+   mp-has-slot hides the standalone row and repositions the popover panel. */
 @media (max-width: 768px) {
-  .mp-root {
-    top: 104px !important;   /* below 2-row topright (~91px) + gap */
+  .mp-root:not(.mp-has-slot) {
+    top: 104px !important;
     right: 10px !important;
     bottom: auto !important;
     flex-direction: column-reverse !important;
     align-items: flex-end !important;
   }
-  .mp-root > div:last-child { gap: 6px !important; }
-  .mp-root > div:last-child > button {
+  .mp-root:not(.mp-has-slot) > div:last-child { gap: 6px !important; }
+  .mp-root:not(.mp-has-slot) > div:last-child > button {
     width: 34px !important;
     height: 34px !important;
   }
 }
 @media (max-width: 640px) {
-  /* 2-row topright bottoms out at ~93px on phones; place player 10px below */
-  .mp-root { top: 103px !important; right: 14px !important; }
-  .mp-root > div:last-child { gap: 5px !important; }
-  .mp-root > div:last-child > button {
+  .mp-root:not(.mp-has-slot) { top: 103px !important; right: 14px !important; }
+  .mp-root:not(.mp-has-slot) > div:last-child { gap: 5px !important; }
+  .mp-root:not(.mp-has-slot) > div:last-child > button {
     width: 32px !important;
     height: 32px !important;
   }
+  /* When buttons are in the topright slot, hide the standalone row and anchor
+     the popover panel just below the topright cluster. */
+  .mp-root.mp-has-slot > div:last-child { display: none !important; }
+  .mp-root.mp-has-slot {
+    top: 62px !important;
+    right: 14px !important;
+    bottom: auto !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+  }
+}
+
+/* Shell-mp-slot: invisible on desktop; display:contents on mobile so the
+   portaled shell-util buttons participate directly in the topright flexbox,
+   forming row 2 alongside History (📖 ♫ 🔊). */
+.shell-mp-slot { display: none; }
+@media (max-width: 640px) {
+  .shell-mp-slot { display: contents; }
 }
 
 /* ——— Auto-hide header chrome on mobile when scrolled ——— */
@@ -2609,21 +2629,42 @@ input[type=range].mp-range::-moz-range-thumb {
   .sp-step { padding: 6px 9px; }
 }
 
-/* ——— Utility cluster: icon-only + History on row 2 at ≤768px ——— */
-/* Row 1: Leaderboard · Reset · Sign In  (fits ~160px, clears the centre lockup)
-   Row 2: History (wraps naturally as the 4th item once max-width is constrained) */
+/* ——— Utility cluster: 3+3 icon grid at ≤768px ——— */
+/* Row 1: Leaderboard · Profile · Reset  (3 icons, ~112px)
+   Row 2: History · Music · Mute         (3 icons, ~112px — music pair portaled via #shell-mp-slot)
+   max-width 138px fits exactly 3 × ~34px + 2 × 5px = 112px per row and
+   leaves a safe gap to the centred brand lockup. auth-signin goes icon-only
+   so it matches the ~34px width of the other shell-util buttons. */
 @media (max-width: 768px) {
   .shell-util span { display: none; }
   .shell-util { padding: 7px 10px; font-size: 15px; }
   .shell-topright {
     flex-wrap: wrap;
     justify-content: flex-end;
-    max-width: 145px;   /* fits Leaderboard + Sign-In on one row; Reset+History wrap to row 2 */
+    max-width: 138px;
     gap: 5px;
     row-gap: 5px;
   }
-  /* History sits under the Sign-In button on row 2 */
+  /* Row 2 order: History first, then music, then mute */
   .shell-util-history { order: 10; }
+  .shell-util-music   { order: 11; }
+  .shell-util-mute    { order: 12; }
+  /* auth-signin: icon-only to match ~34px shell-util width.
+     "Sign in" text is still in the DOM for screen readers. */
+  .auth-signin {
+    padding: 7px 9px;
+    font-size: 0;
+    line-height: 0;
+    min-width: 34px;
+    text-align: center;
+    position: relative;
+  }
+  .auth-signin::after {
+    content: "👤";
+    font-size: 16px;
+    line-height: 1;
+    display: block;
+  }
 }
 
 /* ——— Reset confirm popup ——— */
@@ -4293,13 +4334,20 @@ input[type=range].mp-range::-moz-range-thumb {
     padding-right: 0;
     padding-bottom: 86px; /* scroll past step-foot */
   }
-  .dxi-body.mob-pitch .pitch { min-height: 300px; }
-  .dxi-body.mob-pitch .pitch-rows { min-height: 270px; }
+  /* 4 rows × ~76px per row + pitch padding/foot ≈ 360px needed to show GK–FW */
+  .dxi-body.mob-pitch .pitch { min-height: 380px; }
+  .dxi-body.mob-pitch .pitch-rows { min-height: 320px; }
 
-  /* Horizontal scroll for filter rows */
+  /* Horizontal scroll for filter rows.
+     Must be display:flex (not inline-flex) so the container is constrained
+     to its parent's width; overflow-x:auto then creates an internal scroll
+     instead of letting the row grow wider than the viewport. */
   .pos-tabs {
+    display: flex;
+    width: 100%;
     flex-wrap: nowrap;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     padding-bottom: 4px;
   }
@@ -4392,6 +4440,11 @@ input[type=range].mp-range::-moz-range-thumb {
   .summary-card > .xi-preview,
   .summary-card > .rtf-confirm { overflow: visible; max-height: none; }
 }
+/* Single column on phones so the XI list is full-width and readable */
+@media (max-width: 640px) {
+  .confirm-grid { grid-template-columns: 1fr; }
+  .confirm-name-row { padding: 10px 0 0; }
+}
 
 /* ——— XI share card: compact figure on mobile ——— */
 @media (max-width: 640px) {
@@ -4404,7 +4457,7 @@ input[type=range].mp-range::-moz-range-thumb {
 
 /* ——— Shell chrome: fine-tune on very small screens ——— */
 @media (max-width: 380px) {
-  .shell-body { padding-top: 108px; padding-left: 10px; padding-right: 10px; }
+  .shell-body { padding-top: 116px; padding-left: 10px; padding-right: 10px; }
   .brand-lockup { top: 8px; }
   .bl-crest { width: 40px; }
   .bl-name { font-size: 20px; }

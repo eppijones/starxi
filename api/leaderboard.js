@@ -82,24 +82,39 @@ async function fetchResultsPayload(req) {
   }
 }
 
-// Rank ladder — fantasy first. The league is built on the Dream XI: a great
-// squad alone keeps you in the fight, predictions or not. Score predictions are
-// the bonus that separates tied XIs and crowns the "ultimate champion".
-//   1) Dream XI points  2) prediction bonus  3) exact scorelines (bullseyes)
-//   4) earliest submission — the deterministic tiebreaker that always terminates.
-function rankLadder(a, b) {
-  if (b.xiPts !== a.xiPts) return b.xiPts - a.xiPts;
-  if (b.predictionPts !== a.predictionPts) return b.predictionPts - a.predictionPts;
+// Rank ladder — two modes:
+//
+// combined: primary global board — XI + Road points together. Rewards players
+//   who engage with both modes.
+//   1) total (xiPts + predictionPts)  2) bullseyes  3) earliest submission
+//
+// xionly: Star XI leaderboard — pure squad quality, no prediction bonus.
+//   1) xiPts  2) bullseyes  3) earliest submission
+//
+// The old "xi first, predictions break ties" behaviour is gone from the API —
+// the client now picks which board it wants via ?mode=.
+function rankLadderCombined(a, b) {
+  const ta = a.xiPts + a.predictionPts;
+  const tb = b.xiPts + b.predictionPts;
+  if (tb !== ta) return tb - ta;
   if (b.bullseyes !== a.bullseyes) return b.bullseyes - a.bullseyes;
   return (a.submittedAt || 0) - (b.submittedAt || 0);
 }
+function rankLadderXiOnly(a, b) {
+  if (b.xiPts !== a.xiPts) return b.xiPts - a.xiPts;
+  if (b.bullseyes !== a.bullseyes) return b.bullseyes - a.bullseyes;
+  return (a.submittedAt || 0) - (b.submittedAt || 0);
+}
+// Keep old export name for unit tests (maps to combined).
+function rankLadder(a, b) { return rankLadderCombined(a, b); }
 
-function publicRow(r, uid) {
+function publicRow(r, uid, mode) {
+  const total = r.xiPts + r.predictionPts;
   return {
     rank: r.rank,
     name: r.name,
-    pts: r.pts,
-    total: r.total,
+    pts: mode === "xionly" ? r.xiPts : total,
+    total,
     predictionPts: r.predictionPts,
     xiPts: r.xiPts,
     bullseyes: r.bullseyes,
@@ -107,8 +122,8 @@ function publicRow(r, uid) {
   };
 }
 
-// Build the ranked rows for a roster (list of userIds). Heavy path: one MGET
-// for all entries + score each against the live sim. Cached by the caller.
+// Build raw (unsorted) scored rows for a roster. Sorting happens at serve time
+// so a single memo serves both `combined` and `xionly` requests.
 async function computeRows(memberUids, req) {
   const keys = (memberUids || []).map(ENTRY);
   const raws = await kvMget(keys);
@@ -121,9 +136,6 @@ async function computeRows(memberUids, req) {
   const { FIXTURES, PLAYERS } = loadGameData();
   const payload = await fetchResultsPayload(req);
   const mapped = buildResultsMap(payload, FIXTURES);
-  // playerEvents (Dream XI per-player stats) arrive when balldontlie is wired;
-  // until then XI points are 0 for everyone, so the prediction bonus + submit
-  // time order the table (and the headline `pts` reads 0 — honest pre-data).
   const sim = { results: mapped.results, playerEvents: {} };
   const data = { FIXTURES, PLAYERS };
 
@@ -132,20 +144,13 @@ async function computeRows(memberUids, req) {
     return {
       userId: e.userId,
       name: (e.displayName && String(e.displayName)) || "Player",
-      // Headline = Dream XI (fantasy) points: the league's ranking spine. The
-      // prediction bonus is surfaced separately and breaks ties between XIs.
-      pts: t.xiPts,
-      total: t.total,
       predictionPts: t.predictionPts,
       xiPts: t.xiPts,
       bullseyes: t.bullseyes,
       submittedAt: e.submittedAt || e.updatedAt || 0,
     };
   });
-  rows.sort(rankLadder);
-  rows.forEach((r, i) => {
-    r.rank = i + 1;
-  });
+  // Rows are intentionally NOT sorted here — the caller applies mode-specific sorting.
 
   return {
     rows,
@@ -156,6 +161,12 @@ async function computeRows(memberUids, req) {
       resultsConfigured: mapped.configured,
     },
   };
+}
+
+function sortedRows(rows, mode) {
+  const sorted = rows.slice().sort(mode === "xionly" ? rankLadderXiOnly : rankLadderCombined);
+  sorted.forEach((r, i) => { r.rank = i + 1; });
+  return sorted;
 }
 
 module.exports = async (req, res) => {
@@ -176,9 +187,12 @@ module.exports = async (req, res) => {
   let limit = parseInt(url.searchParams.get("limit"), 10);
   if (!Number.isFinite(limit) || limit < 1) limit = 50;
   limit = Math.min(limit, 200);
+  // `mode` selects the ranking spine. Combined (default) ranks by total points;
+  // xionly ranks by Star XI points alone (ignores prediction bonus).
+  let mode = url.searchParams.get("mode") === "xionly" ? "xionly" : "combined";
 
   // Resolve scope + roster.
-  let scope, scopeName, leagueCode, memberUids;
+  let scope, scopeName, leagueCode, memberUids, leagueRtfEnabled;
   if (code) {
     const meta = safeParse(await kvGet(LEAGUE_META(code)));
     if (!meta) return json(res, 404, { ok: false, error: "no_such_league" });
@@ -190,14 +204,19 @@ module.exports = async (req, res) => {
     scope = "league";
     scopeName = meta.name;
     leagueCode = code;
+    leagueRtfEnabled = meta.roadToFinalEnabled !== false;
+    // If the league has disabled Road-to-Final scoring, force Star XI only ranking.
+    if (!leagueRtfEnabled) mode = "xionly";
   } else {
     memberUids = (await kvSmembers(ROSTER)) || [];
     scope = "global";
     scopeName = "Global";
     leagueCode = null;
+    leagueRtfEnabled = true;
   }
 
   // Serve a warm per-scope memo if fresh; otherwise recompute.
+  // The memo caches raw (unsorted) rows so both modes share one expensive pass.
   const scopeKey = scope + ":" + (leagueCode || "");
   let cached = MEMO.get(scopeKey);
   if (!cached || Date.now() - cached.at > MEMO_TTL_MS) {
@@ -207,9 +226,10 @@ module.exports = async (req, res) => {
   }
 
   const { rows, meta } = cached;
-  const top = rows.slice(0, limit).map((r) => publicRow(r, uid));
-  const mine = rows.find((r) => r.userId === uid);
-  const you = mine ? publicRow(mine, uid) : null;
+  const ranked = sortedRows(rows, mode);
+  const top = ranked.slice(0, limit).map((r) => publicRow(r, uid, mode));
+  const mine = ranked.find((r) => r.userId === uid);
+  const you = mine ? publicRow(mine, uid, mode) : null;
 
   return json(res, 200, {
     ok: true,
@@ -217,7 +237,9 @@ module.exports = async (req, res) => {
     scope,
     code: leagueCode,
     name: scopeName,
-    total: rows.length,
+    mode,
+    leagueRtfEnabled,
+    total: ranked.length,
     played: meta.played,
     live: meta.live,
     updatedAt: meta.updatedAt,
