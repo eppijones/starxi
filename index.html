@@ -6,6 +6,23 @@
   <title>STAR XI — World Cup 2026 · pick your nation, draft your XI</title>
   <meta name="description" content="STAR XI — an independent, fan-made prediction + Star XI squad game for the summer of '26. Pick your nation, draft your XI, call every score. Not affiliated with, endorsed by, or licensed by FIFA." />
 
+  <!-- Social share cards (Open Graph + Twitter) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="STAR XI" />
+  <meta property="og:title" content="STAR XI — World Cup 2026" />
+  <meta property="og:description" content="Pick your nation, draft your dream XI, and call every score on the Road to the Final. The fan-made prediction game for the summer of '26." />
+  <meta property="og:url" content="https://starxi.io/" />
+  <meta property="og:image" content="https://starxi.io/brand/social-post.png" />
+  <meta property="og:image:width" content="1080" />
+  <meta property="og:image:height" content="1080" />
+  <meta property="og:image:alt" content="STAR XI — World Cup 2026" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="STAR XI — World Cup 2026" />
+  <meta name="twitter:description" content="Pick your nation, draft your dream XI, and call every score on the Road to the Final." />
+  <meta name="twitter:image" content="https://starxi.io/brand/social-post.png" />
+
+  <link rel="manifest" href="manifest.json" />
+
   <link rel="icon" type="image/svg+xml" href="brand/star-xi-mark.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="brand/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="brand/favicon-16.png" />
@@ -20,8 +37,8 @@
   />
   <link rel="stylesheet" href="festival/styles.css?v=20260602-resp" />
 
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
 
@@ -102,5 +119,11 @@
   <script type="text/babel" src="festival/MatchWatch.jsx?v=20260601mw2"></script>
   <script type="text/babel" src="festival/MusicPlayer.jsx?v=20260601ag"></script>
   <script type="text/babel" src="festival/app.jsx?v=20260601-sum5"></script>
+
+  <!-- Vercel Speed Insights (Core Web Vitals) + Web Analytics (traffic).
+       Served by Vercel's edge when each is enabled in the project dashboard;
+       harmless 404 until then. Static-site (non-framework) script form. -->
+  <script defer src="/_vercel/speed-insights/script.js"></script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

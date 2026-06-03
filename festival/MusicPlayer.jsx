@@ -97,6 +97,10 @@ function MusicPlayer({ step }) {
   // without re-subscribing. Mute does NOT clear intent (muted audio is still
   // "playing"); only the pause button does.
   const wantPlayRef = useRef(true);
+  // Whether we were playing at the moment the page was hidden (tab switch,
+  // home button on mobile, etc.). Used to restore playback on return without
+  // running audio in the background.
+  const wasPlayingRef = useRef(false);
 
   // ——— Build the audio element once; make playback start no matter what ———
   // Browsers block autoplay-with-sound on a fresh visit until the user has
@@ -154,12 +158,35 @@ function MusicPlayer({ step }) {
     a.addEventListener("canplay", tryAutoplay);
     if (a.readyState >= 3) tryAutoplay();
 
-    // Watchdog: if the browser pauses us while we still intend to play (tab
-    // backgrounding, audio-focus loss, etc.), nudge it back. Guarded by
-    // wantPlayRef so a deliberate pause is respected, and by a.ended /
-    // a.seeking so the load()/ended transitions don't trigger a fight.
+    // Pause when the page is hidden (tab switch, home button, app switch on
+    // mobile). Resume when the page becomes visible again — but only if we
+    // were playing and the user hasn't explicitly paused since.
+    // This is the key guard that prevents audio running in the background.
+    const onVisibilityChange = () => {
+      if (!active) return;
+      if (document.visibilityState === "hidden") {
+        wasPlayingRef.current = !a.paused;
+        a.pause();
+        setPlaying(false);
+      } else if (document.visibilityState === "visible") {
+        if (wasPlayingRef.current && wantPlayRef.current) {
+          kick();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    // Belt-and-suspenders: pagehide fires when the user fully closes/leaves
+    // the page (before unload, or on iOS where unload is unreliable).
+    const onPageHide = () => { a.pause(); setPlaying(false); };
+    window.addEventListener("pagehide", onPageHide);
+
+    // Watchdog: only fight browser-initiated pauses when the page IS visible
+    // (e.g. a phone-call audio-focus steal, not a tab-hide). Never fight when
+    // the page is hidden — visibilitychange handles the resume on return.
     const onPause = () => {
       if (!active || !wantPlayRef.current || a.ended || a.seeking) return;
+      if (document.visibilityState === "hidden") return;
       kick();
     };
     a.addEventListener("pause", onPause);
@@ -174,6 +201,8 @@ function MusicPlayer({ step }) {
       a.removeEventListener("ended", onEnd);
       a.removeEventListener("canplay", tryAutoplay);
       a.removeEventListener("pause", onPause);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
     };
   }, []);
 

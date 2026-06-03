@@ -18,52 +18,51 @@
 
 function PointsInfoModal({ onClose }) {
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal pts-info-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h3>How points work</h3>
-          <button className="modal-x" onClick={onClose}>×</button>
+    <div className="pts-sheet-backdrop" onClick={onClose}>
+      <div className="pts-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="pts-sheet-handle" />
+        <div className="pts-sheet-head">
+          <span className="pts-sheet-title">How points work</span>
+          <button className="pts-sheet-close" onClick={onClose}>×</button>
         </div>
+        <div className="pts-sheet-body">
 
-        <div className="pts-info-sections">
-          <div className="pts-info-section">
-            <div className="pts-info-heading">⚽ Star XI</div>
-            <div className="pts-info-grid">
-              <span>Goal</span><span>+5 pts</span>
-              <span>Assist</span><span>+3 pts</span>
-              <span>Clean sheet (GK/DF)</span><span>+6 / +3 pts</span>
-              <span>Win</span><span>+3 pts</span>
-              <span>Draw</span><span>+1 pt</span>
-              <span>Yellow card</span><span>−1 pt</span>
-              <span>Red card</span><span>−3 pts</span>
-              <span>Captain</span><span>×2 multiplier</span>
+          <div className="pts-block">
+            <div className="pts-block-label">⚽ Star XI — per match</div>
+            <div className="pts-table">
+              <div className="pts-row pos"><span>Goal scored</span><span>+5</span></div>
+              <div className="pts-row pos"><span>Assist</span><span>+3</span></div>
+              <div className="pts-row pos"><span>Clean sheet (GK)</span><span>+6</span></div>
+              <div className="pts-row pos"><span>Clean sheet (DF)</span><span>+3</span></div>
+              <div className="pts-row pos"><span>Team wins</span><span>+3</span></div>
+              <div className="pts-row pos"><span>Team draws</span><span>+1</span></div>
+              <div className="pts-row neg"><span>Yellow card</span><span>−1</span></div>
+              <div className="pts-row neg"><span>Red card</span><span>−3</span></div>
+              <div className="pts-row cap"><span>Captain armband</span><span>×2</span></div>
             </div>
-            <div className="pts-info-note">Hidden gems (low form rating) earn a ×1.3–×2 boost on positive points.</div>
+            <p className="pts-note">Lower-rated players earn a ×1.3–×2 gem boost on positive points.</p>
           </div>
 
-          <div className="pts-info-section">
-            <div className="pts-info-heading">🗺️ Road to the Final</div>
-            <div className="pts-info-grid">
-              <span>Correct group position</span><span>+1 per team</span>
-              <span>Perfect group</span><span>Bullseye ★</span>
-              <span>R32 team advances</span><span>+1 per pick</span>
-              <span>R16 team advances</span><span>+2 per pick</span>
-              <span>Quarterfinal advance</span><span>+4 per pick</span>
-              <span>Semifinal advance</span><span>+8 per pick</span>
-              <span>Correct champion</span><span>+16 pts + Bullseye ★</span>
+          <div className="pts-block">
+            <div className="pts-block-label">🗺️ Road to the Final</div>
+            <div className="pts-table">
+              <div className="pts-row pos"><span>Correct group position</span><span>+1</span></div>
+              <div className="pts-row pos"><span>Perfect group (Bullseye)</span><span>★</span></div>
+              <div className="pts-row pos"><span>R32 advance</span><span>+1</span></div>
+              <div className="pts-row pos"><span>R16 advance</span><span>+2</span></div>
+              <div className="pts-row pos"><span>Quarterfinal advance</span><span>+4</span></div>
+              <div className="pts-row pos"><span>Semifinal advance</span><span>+8</span></div>
+              <div className="pts-row pos"><span>Correct champion</span><span>+16 ★</span></div>
             </div>
-            <div className="pts-info-note">Your home nation earns double Road-to-the-Final points.</div>
+            <p className="pts-note">Your home nation earns double Road-to-the-Final points.</p>
           </div>
 
-          <div className="pts-info-section pts-info-boards">
-            <div className="pts-info-heading">📊 Two leaderboards</div>
-            <p className="pts-info-board-note">
-              <strong>Combined</strong> — XI points + Road points together. The primary global table.
-            </p>
-            <p className="pts-info-board-note">
-              <strong>Star XI only</strong> — ranked purely on your squad's performance. Road picks not counted.
-            </p>
+          <div className="pts-block">
+            <div className="pts-block-label">📊 Two leaderboards</div>
+            <p className="pts-note pts-note-board"><strong>Combined</strong> — XI points + Road picks. The main global table.</p>
+            <p className="pts-note pts-note-board"><strong>Star XI only</strong> — squad performance only, Road picks excluded.</p>
           </div>
+
         </div>
       </div>
     </div>
@@ -845,7 +844,7 @@ function KoMatchCard({ home, away, picked, nationCode, ptsPerPick, onPick }) {
       >
         <span className="kom-flag">{team.flag}</span>
         <div className="kom-meta">
-          <span className="kom-name">{team.name}</span>
+          <span className="kom-name">{team.code}</span>
           <span className="kom-rank">#{team.rank}</span>
         </div>
         <span className={"kom-pts" + (isPicked ? " active" : "")}>

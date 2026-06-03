@@ -627,6 +627,11 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
             </span>
           )}
         </button>
+        <button
+          className="pill ghost sm"
+          onClick={onHistory}
+          title="World Cup history & records"
+        >📖 History</button>
       </div>
 
       {/* Road to the Final — full-screen modal, portalled to body to escape the
@@ -866,8 +871,10 @@ function App() {
   const initial = window.loadState();
   const watchOn = matchWatchEnabled();
   const [state, setState] = useState({ ...DEFAULT_STATE, ...(initial?.state || {}) });
+  const RESTORABLE = ["welcome", "dreamxi", "predict", "confirm", "live"];
+  const savedStep = RESTORABLE.includes(initial?.step) ? initial.step : "welcome";
   const [step, setStep] = useState(
-    watchOn ? "matchwatch" : (initial?.step || "welcome")
+    watchOn ? "matchwatch" : savedStep
   );
 
   useEffect(() => {
@@ -1047,4 +1054,44 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+// ——— Error boundary ———
+// A single render error anywhere in the tree would otherwise white-screen the
+// whole app. This catches it and shows a recoverable fallback instead. The
+// entry is already saved in localStorage, so "Start over" never loses picks
+// the user has committed — it just re-mounts the app from clean state.
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    // Surface to the console; a monitoring hook (e.g. Sentry) can attach here.
+    console.error("STAR XI render error:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="app-error-screen">
+          <div className="app-error-card">
+            <img className="app-error-mark" src="brand/star-xi-white.png" alt="STAR XI" />
+            <h1>Something went wrong</h1>
+            <p>Your picks are saved. Reloading usually fixes it.</p>
+            <div className="app-error-actions">
+              <button className="pill primary" onClick={() => window.location.reload()}>
+                Reload
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <ErrorBoundary><App /></ErrorBoundary>
+);

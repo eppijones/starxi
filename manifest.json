@@ -1,0 +1,28 @@
+{
+  "name": "STAR XI — World Cup 2026",
+  "short_name": "STAR XI",
+  "description": "Pick your nation, draft your dream XI, and call every score on the Road to the Final.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#08130D",
+  "theme_color": "#0B7A3E",
+  "icons": [
+    {
+      "src": "brand/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "brand/apple-touch-icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "brand/app-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

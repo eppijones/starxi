@@ -484,6 +484,20 @@ function Welcome({ state, setState, onNext, onHistory }) {
   const activeCode = active.code;
   const activeNation = window.NATIONS.find((n) => n.code === activeCode) || window.NATIONS[0];
   const bg = NATION_BG[activeCode] || "#15161B";
+
+  // Keep body + .app background in sync with the nation colour so no dark bleed
+  // shows around/below the landing div on any viewport size.
+  useEffect(() => {
+    document.body.style.background = bg;
+    const app = document.querySelector(".app");
+    if (app) app.style.background = bg;
+    return () => {
+      document.body.style.background = "";
+      const a = document.querySelector(".app");
+      if (a) a.style.background = "";
+    };
+  }, [bg]);
+
   const ghost = NATION_NICK[activeCode] || activeNation.name.toUpperCase();
   const factParts = [
     activeNation.group ? `GROUP ${activeNation.group}` : null,

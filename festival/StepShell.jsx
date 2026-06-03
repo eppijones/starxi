@@ -139,12 +139,6 @@ function StepShell({ step, steps, currentIdx, goTo, reset, ghost, children, matc
           )}
         </div>
 
-        <button
-          className={"shell-util shell-util-history" + (step === "history" ? " on" : "")}
-          onClick={() => goTo("history")}
-          title="World Cup history & records"
-        >📖<span>History</span></button>
-
         {/* Music player controls are portaled into this slot on mobile so they
             share row 2 with History, giving a symmetric 3+3 icon grid that
             mirrors the 3+2 step-badge grid on the left. Hidden on desktop. */}
