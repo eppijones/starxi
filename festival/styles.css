@@ -2357,8 +2357,12 @@ h3.subtitle {
 /* progress tracker — left shoulder, aligned with the lockup */
 .shell-progress {
   position: fixed; top: 20px; left: 16px; z-index: 60;
-  display: flex; align-items: center; gap: 5px;
-  max-width: 30vw;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 5px; row-gap: 5px;
+  /* Hard anti-overlap guard: the tracker is pinned to the left shoulder while
+     the brand lockup is centred. Capping its width to (half the viewport −
+     the lockup's half-width − breathing room) means the pills can NEVER reach
+     the logo at any width — they wrap downward instead of bleeding into it. */
+  max-width: calc(50vw - 108px);
 }
 .sp-step {
   appearance: none; cursor: pointer;
@@ -2589,10 +2593,12 @@ input[type=range].mp-range::-moz-range-thumb {
 }
 
 /* ——— Music player: top-right corner on mobile/tablet ——— */
-/* On tablet (≤768px) the standalone buttons move below the 2-row topright.
-   On mobile (≤640px) the buttons are portaled into #shell-mp-slot instead;
-   mp-has-slot hides the standalone row and repositions the popover panel. */
-@media (max-width: 768px) {
+/* On the Welcome screen (no topright slot) the standalone buttons dock just
+   below the top-right header. On every flow screen the buttons are portaled
+   into #shell-mp-slot instead (see the tablet/mobile block below), which hides
+   this standalone row and repositions the popover. The ceiling matches the
+   rest of the compact chrome so iPads / Android tablets behave like phones. */
+@media (max-width: 1024px), (pointer: coarse) and (max-width: 1366px) {
   .mp-root:not(.mp-has-slot) {
     top: 104px !important;
     right: 10px !important;
@@ -2613,8 +2619,17 @@ input[type=range].mp-range::-moz-range-thumb {
     width: 32px !important;
     height: 32px !important;
   }
-  /* When buttons are in the topright slot, hide the standalone row and anchor
-     the popover panel just below the topright cluster. */
+}
+
+/* Shell-mp-slot: invisible on desktop; display:contents on tablet & mobile so
+   the portaled shell-util buttons participate directly in the topright flexbox,
+   forming row 2 of the icon grid (music · mute) — the SAME placement on tablets
+   as on phones: tucked under Sign-in / Reset, never the bottom corner. */
+.shell-mp-slot { display: none; }
+@media (max-width: 1024px), (pointer: coarse) and (max-width: 1366px) {
+  .shell-mp-slot { display: contents; }
+  /* With the buttons living in the slot, hide the standalone bottom row and
+     dock the "Now playing" popover just under the topright cluster. */
   .mp-root.mp-has-slot > div:last-child { display: none !important; }
   .mp-root.mp-has-slot {
     top: 62px !important;
@@ -2623,14 +2638,6 @@ input[type=range].mp-range::-moz-range-thumb {
     flex-direction: column !important;
     align-items: flex-end !important;
   }
-}
-
-/* Shell-mp-slot: invisible on desktop; display:contents on mobile so the
-   portaled shell-util buttons participate directly in the topright flexbox,
-   forming row 2 alongside History (📖 ♫ 🔊). */
-.shell-mp-slot { display: none; }
-@media (max-width: 640px) {
-  .shell-mp-slot { display: contents; }
 }
 
 /* ——— Auto-hide header chrome on mobile when scrolled ——— */
@@ -2677,8 +2684,11 @@ input[type=range].mp-range::-moz-range-thumb {
   }
 }
 
-/* ——— Step tracker: wrap to 3 + 2 rows on tablet/mobile ——— */
-@media (max-width: 768px) {
+/* ——— Step tracker: compact numbers-only grid on tablet & mobile ——— */
+/* Any viewport ≤1024px, plus any touch device up to iPad-Pro-landscape width,
+   gets the same compact tracker as mobile so it never crowds the centred logo.
+   Desktop (fine pointer, >1024px) keeps the labelled single row. */
+@media (max-width: 1024px), (pointer: coarse) and (max-width: 1366px) {
   .shell-progress {
     flex-wrap: wrap;
     max-width: 110px;
@@ -2695,7 +2705,7 @@ input[type=range].mp-range::-moz-range-thumb {
    max-width 138px fits exactly 3 × ~34px + 2 × 5px = 112px per row and
    leaves a safe gap to the centred brand lockup. auth-signin goes icon-only
    so it matches the ~34px width of the other shell-util buttons. */
-@media (max-width: 768px) {
+@media (max-width: 1024px), (pointer: coarse) and (max-width: 1366px) {
   .shell-util span { display: none; }
   .shell-util { padding: 7px 10px; font-size: 15px; }
   .shell-topright {
@@ -3092,15 +3102,23 @@ input[type=range].mp-range::-moz-range-thumb {
 }
 .rtf-thirds-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-.rtf-thirds-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+/* Best-3rd grid: compact flag tiles that auto-fill so all 12 third-placed
+   teams sit in ONE view (≈4 columns on a phone, no long scroll). */
+.rtf-thirds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 8px;
+}
+/* One tile = group letter (top-left), pick state (top-right), flag, short
+   name, FIFA rank. State reads from the border + the corner badge. */
 .rtf-third {
-  appearance: none; cursor: pointer; text-align: left;
+  appearance: none; cursor: pointer; position: relative;
   background: var(--glass-dark);
   border: 1.5px solid rgba(255,255,255,.18);
   border-radius: 12px;
-  padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 8px;
-  color: #fff;
+  padding: 13px 6px 9px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  color: #fff; text-align: center;
   transition: background .14s, border-color .14s, transform .12s, opacity .14s;
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
@@ -3112,26 +3130,32 @@ input[type=range].mp-range::-moz-range-thumb {
 .rtf-third.picked { background: rgba(198,242,78,.16); border-color: var(--lime); }
 .rtf-third.mine   { border-color: rgba(233,185,73,.55); }
 .rtf-third.picked.mine { background: rgba(233,185,73,.22); border-color: var(--gold); }
-.rtf-third.full   { opacity: .32; cursor: not-allowed; }
-.rtf-third-head {
-  display: flex; align-items: center; justify-content: space-between;
-  font-family: var(--font-text); font-weight: 800;
-  font-size: 10px; letter-spacing: .12em;
-  text-transform: uppercase; opacity: .7;
+.rtf-third.full   { opacity: .34; cursor: not-allowed; }
+.rtf-t3-grp {
+  position: absolute; top: 5px; left: 7px;
+  font-family: var(--font-display); font-size: 12px; line-height: 1;
+  letter-spacing: .02em; color: rgba(255,255,255,.5);
 }
-.rtf-third-body { display: flex; align-items: center; gap: 11px; }
-.rtf-third-body .rtf-flag { font-size: 30px; }
-.rtf-third-body .rtf-name { font-size: 15px; }
-.rtf-third-tag {
-  font-family: var(--font-text); font-weight: 800;
-  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
-  background: rgba(255,255,255,.1); color: #fff;
-  padding: 4px 10px; border-radius: 999px;
-  align-self: flex-start;
+.rtf-t3-state {
+  position: absolute; top: 5px; right: 6px;
+  width: 17px; height: 17px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 900; line-height: 1;
+  background: rgba(255,255,255,.12); color: rgba(255,255,255,.5);
 }
-.rtf-third-tag.yes { background: rgba(198,242,78,.28); color: var(--lime); }
-.rtf-third.mine .rtf-third-tag.yes { background: rgba(233,185,73,.3); color: var(--gold); }
-.rtf-third-tag.no  { background: rgba(255,255,255,.06); opacity: .7; }
+.rtf-third.picked .rtf-t3-state { background: var(--lime); color: #08130d; }
+.rtf-third.picked.mine .rtf-t3-state { background: var(--gold); }
+.rtf-t3-star {
+  position: absolute; top: 24px; left: 50%; transform: translateX(-50%);
+  font-size: 9px; color: var(--gold); pointer-events: none;
+}
+.rtf-t3-flag { font-size: 29px; line-height: 1; margin-top: 4px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
+.rtf-t3-name {
+  font-family: var(--font-display); font-weight: 400; text-transform: uppercase;
+  font-size: 12px; letter-spacing: .01em; line-height: 1.05;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rtf-t3-rank { font-family: var(--font-text); font-weight: 700; font-size: 10px; opacity: .55; }
 .rtf-boost.sm { font-size: 9px; padding: 2px 6px; letter-spacing: .04em; }
 
 /* Knockout draw — sided layout (top half | trophy | bottom half) ---- */
@@ -3530,7 +3554,6 @@ input[type=range].mp-range::-moz-range-thumb {
 /* Responsive tweaks --------------------------------------------- */
 @media (max-width: 1100px) {
   .rtf-pool { grid-template-columns: repeat(2, 1fr); }
-  .rtf-thirds-grid { grid-template-columns: repeat(3, 1fr); }
   .rtf-final { grid-template-columns: 1fr; }
   .rtf-bracket-mid { min-width: 40px; }
   .rtf-mid-trophy { font-size: 24px; }
@@ -3538,7 +3561,6 @@ input[type=range].mp-range::-moz-range-thumb {
   .lb-rounds { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 720px) {
-  .rtf-thirds-grid { grid-template-columns: repeat(2, 1fr); }
   /* Stack the knockout halves on tight screens — keep them labelled. */
   .rtf-bracket { grid-template-columns: 1fr; gap: 12px; }
   .rtf-bracket-mid {
@@ -3550,7 +3572,6 @@ input[type=range].mp-range::-moz-range-thumb {
 }
 @media (max-width: 640px) {
   .rtf-pool { grid-template-columns: 1fr; }
-  .rtf-thirds-grid { grid-template-columns: 1fr; }
   .rtf-slot { grid-template-columns: 64px 28px 1fr auto 18px; padding: 9px 11px; }
   .rtf-slot.empty { grid-template-columns: 64px 1fr; }
   .rtf-pos-lab { font-size: 14px; }
@@ -5049,6 +5070,17 @@ input[type=range].mp-range::-moz-range-thumb {
   .rtf-lrow { min-height: 50px; padding: 8px 10px 8px 12px; gap: 7px; }
   /* Badge slightly more compact */
   .rtf-lrow-badge { padding: 4px 7px; font-size: 8px; }
+
+  /* Bridge the vertical air between pool → ladder → helpline so the whole
+     group ranker fits one screen and the hint is never clipped at the foot. */
+  .rtf-group { gap: 8px; }
+  .rtf-grouphead { margin-bottom: 6px; }
+  .rtf-poolwrap { margin-bottom: 8px; }
+  .rtf-poolcue { margin-bottom: 6px; }
+  .rtf-pchip { min-height: 46px; padding: 8px 10px; }
+  .rtf-ladder-head { padding: 8px 14px; }
+  .rtf-helpline { margin-top: 8px; font-size: 10px; gap: 6px; }
+  .rtf-help-desktop { display: none; }   /* "drag on desktop" is irrelevant on touch */
 }
 
 /* ——— Share card (step 05 Live): smaller on mobile so it fits one screen ——— */

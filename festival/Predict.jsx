@@ -139,6 +139,16 @@ function Predict({ state, setState, onNext, onBack }) {
   const [sub, setSub] = useState(() => rtfFindStartSub(bracket));
   const [ptsInfoOpen, setPtsInfoOpen] = useState(false);
 
+  // Snap the scroll pane back to the top whenever the sub-step changes. Players
+  // jump between rounds by tapping the progress strip at the BOTTOM of the pane,
+  // which used to leave them stranded at the bottom of the next round (or with
+  // the foot buttons out of view). Every new round should open at its title.
+  const scrollRef = useRef(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = 0;
+  }, [sub]);
+
   const writeBracket = (mutator) => {
     setState((s) => {
       const next = rtfEnsureBracket(s.bracket);
@@ -330,7 +340,7 @@ function Predict({ state, setState, onNext, onBack }) {
 
   return (
     <div className="step-screen">
-      <div className="step-scroll stagger">
+      <div className="step-scroll stagger" ref={scrollRef}>
         <div className="rtf-head">
           <div className="ph-titles">
             <h2 className="title">Road to the Final</h2>
@@ -678,7 +688,7 @@ function GroupBoard({ letter, teams, ordering, nationCode, onSet }) {
       </div>
 
       <div className="rtf-helpline">
-        <b>Tap</b> to seat · <b>▲▼</b> to reorder · <b>✕</b> to clear · drag on desktop
+        <b>Tap</b> to seat · <b>▲▼</b> to reorder · <b>✕</b> to clear<span className="rtf-help-desktop"> · drag on desktop</span>
       </div>
     </div>
   );
@@ -749,21 +759,14 @@ function BestThirdsBoard({ bracket, nationCode, onSetLucky }) {
               className={"rtf-third" + (picked ? " picked" : "") + (mine ? " mine" : "") + (full ? " full" : "")}
               onClick={() => toggle(team.code)}
               disabled={full}
+              title={`Group ${group} 3rd · ${team.name} · FIFA #${team.rank}${picked ? " · advances" : full ? " · locked out" : " · tap to advance"}`}
             >
-              <div className="rtf-third-head">
-                <span className="rtf-third-grp">Group {group} · 3rd</span>
-                {mine && <span className="rtf-boost sm">★ 2×</span>}
-              </div>
-              <div className="rtf-third-body">
-                <span className="rtf-flag">{team.flag}</span>
-                <div className="rtf-team-meta">
-                  <span className="rtf-name">{team.name}</span>
-                  <span className="rtf-rank">FIFA #{team.rank}</span>
-                </div>
-              </div>
-              <div className={"rtf-third-tag" + (picked ? " yes" : full ? " no" : "")}>
-                {picked ? "✓ Advances" : full ? "Locked out" : "Tap to advance"}
-              </div>
+              <span className="rtf-t3-grp">{group}</span>
+              <span className="rtf-t3-state" aria-hidden="true">{picked ? "✓" : full ? "" : "+"}</span>
+              {mine && <span className="rtf-t3-star" title="Your nation — points ×2">★</span>}
+              <span className="rtf-t3-flag">{team.flag}</span>
+              <span className="rtf-t3-name">{team.name}</span>
+              <span className="rtf-t3-rank">#{team.rank}</span>
             </button>
           );
         })}

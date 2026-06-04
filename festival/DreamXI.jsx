@@ -501,9 +501,8 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
           <button className="pill primary" disabled>Pick {totalLeft} more</button>
         ) : (
           <>
-            <button className="pill ghost sm" onClick={onSkip}>Review &amp; lock in</button>
-            <span className="cta-arrows" aria-hidden="true">»</span>
-            <button className="pill primary" onClick={onNext}>+ Road to the Final</button>
+            <button className="pill ghost sm" onClick={onSkip}>Review</button>
+            <button className="pill primary" onClick={onNext}>Road to Final →</button>
           </>
         )}
       </div>
