@@ -225,10 +225,17 @@
       }
       return events[id];
     }
-    // Index players by nation + normalised last name for fuzzy matching.
+    // Index players by nation + normalised last name for fuzzy matching across
+    // two different feeds. Accent-fold (María → maria) so a scorer string from
+    // one source matches a roster name spelled with/without diacritics.
+    function fold(s) {
+      var x = String(s || "");
+      if (x.normalize) x = x.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return x.toLowerCase();
+    }
     function lastName(name) {
-      var parts = String(name || "").replace(/\./g, " ").trim().split(/\s+/);
-      return (parts[parts.length - 1] || "").toLowerCase();
+      var parts = fold(name).replace(/[.'-]/g, " ").trim().split(/\s+/);
+      return parts[parts.length - 1] || "";
     }
     var byNatLast = {};
     PLAYERS.forEach(function (p) {

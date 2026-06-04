@@ -285,6 +285,19 @@ const earlyLate = gateLateBracket(fullBracket, Date.parse("2026-06-20T12:00:00Z"
 eq("group-stage joiner keeps all KO picks", Object.keys(earlyLate.advances.r32).length, 1);
 eq("group-stage joiner loses group calls", earlyLate.groups, {});
 
+// ——— ESPN goal-text parser (goals + assists source) ———
+section("ESPN parseGoal — scorer + assist extraction");
+const { parseGoal } = require("../api/_lib/espn-wc");
+eq("penalty, no assist",
+  parseGoal("Goal!  Argentina 1, France 0. Lionel Messi (Argentina) converts the penalty with a left footed shot to the bottom right corner."),
+  { scorer: "Lionel Messi", assist: null });
+eq("open play with assist",
+  parseGoal("Goal!  Argentina 2, France 0. Ángel Di María (Argentina) left footed shot from the centre of the box to the bottom right corner. Assisted by Alexis Mac Allister  following a fast break."),
+  { scorer: "Ángel Di María", assist: "Alexis Mac Allister" });
+eq("assist ended by period",
+  parseGoal("Goal!  Argentina 2, France 2. Kylian Mbappé (France) right footed shot from the left side of the box to the bottom right corner. Assisted by Marcus Thuram."),
+  { scorer: "Kylian Mbappé", assist: "Marcus Thuram" });
+
 // ——— Summary ———
 console.log(`\n${"─".repeat(48)}`);
 console.log(`  ${pass} passed, ${fail} failed`);
