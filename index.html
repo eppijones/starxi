@@ -35,7 +35,7 @@
     href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="festival/styles.css?v=20260602-resp" />
+  <link rel="stylesheet" href="festival/styles.css?v=20260604-codechip" />
 
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
@@ -48,8 +48,8 @@
   <script
     async
     crossorigin="anonymous"
-    data-clerk-publishable-key="pk_test_Y3VyaW91cy1iZWFnbGUtODYuY2xlcmsuYWNjb3VudHMuZGV2JA"
-    src="https://curious-beagle-86.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+    data-clerk-publishable-key="pk_live_Y2xlcmsuc3RhcnhpLmlvJA"
+    src="https://clerk.starxi.io/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
   ></script>
   <script>
     // window.clerkReady resolves to the loaded Clerk instance once the async
@@ -64,6 +64,28 @@
             window.Clerk.load({
               routerPush:    function (to) { history.pushState({}, '', to); },
               routerReplace: function (to) { history.replaceState({}, '', to); },
+              // Dark STAR XI brand theme for all Clerk UI (sign-in, sign-up,
+              // user button) so the modal reads as native, not stock white.
+              appearance: {
+                variables: {
+                  colorPrimary: "#19A85A",
+                  colorBackground: "#101C14",
+                  colorText: "#FFFFFF",
+                  colorTextSecondary: "rgba(255,255,255,0.60)",
+                  colorTextOnPrimaryBackground: "#08130D",
+                  colorInputBackground: "rgba(255,255,255,0.06)",
+                  colorInputText: "#FFFFFF",
+                  colorNeutral: "#FFFFFF",
+                  colorShimmer: "rgba(255,255,255,0.10)",
+                  borderRadius: "14px",
+                  fontFamily: "Inter, system-ui, sans-serif",
+                },
+                elements: {
+                  card: { boxShadow: "0 24px 70px rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.08)" },
+                  socialButtonsBlockButton: { border: "1px solid rgba(255,255,255,0.16)" },
+                  formButtonPrimary: { fontWeight: "700", letterSpacing: "0.02em" },
+                },
+              },
             })
               .then(function () { resolve(window.Clerk); })
               .catch(function () { resolve(window.Clerk); });
@@ -115,7 +137,7 @@
   <script type="text/babel" src="festival/Confirm.jsx?v=20260601-sum5"></script>
   <script type="text/babel" src="festival/Live.jsx?v=20260601-sum3"></script>
   <script type="text/babel" src="festival/History.jsx?v=20260601-sum3"></script>
-  <script type="text/babel" src="festival/Leaderboard.jsx?v=20260601-sum3"></script>
+  <script type="text/babel" src="festival/Leaderboard.jsx?v=20260604-codechip"></script>
   <script type="text/babel" src="festival/MatchWatch.jsx?v=20260601mw2"></script>
   <script type="text/babel" src="festival/MusicPlayer.jsx?v=20260601ag"></script>
   <script type="text/babel" src="festival/app.jsx?v=20260601-sum5"></script>

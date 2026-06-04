@@ -1788,11 +1788,37 @@ h3.subtitle {
 
 /* ——— Leaderboard screen (glass v2) ——— */
 .lb-screen { max-width: 760px; margin: 0 auto; width: 100%; }
-.lb-head { margin-bottom: 14px; }
+.lb-head {
+  margin-bottom: 14px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+}
 .lb-title {
   font-family: var(--font-display); font-size: clamp(28px, 6vw, 40px);
   letter-spacing: .01em; text-transform: uppercase; margin: 2px 0 0; line-height: 1; color: #fff;
 }
+
+/* Persistent invite-code chip — shown whenever a league is in view */
+.lb-code-chip {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  margin-top: 6px;
+  background: rgba(255,255,255,.1); border: 1.5px solid rgba(255,255,255,.28);
+  border-radius: 999px; padding: 6px 12px 6px 10px;
+  cursor: pointer; color: #fff;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transition: background .15s ease, border-color .15s ease, transform .1s ease;
+}
+.lb-code-chip:hover { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.5); transform: translateY(-1px); }
+.lb-code-chip:active { transform: translateY(0); }
+.lb-code-chip.copied { border-color: var(--lime); background: rgba(198,242,78,.15); }
+.lb-code-chip-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+  opacity: .65; font-family: var(--font-text); font-weight: 600;
+}
+.lb-code-chip-val {
+  font-family: var(--font-display); font-size: 18px; letter-spacing: .06em;
+  text-transform: uppercase; line-height: 1;
+}
+.lb-code-chip-icon { font-size: 13px; opacity: .8; }
 
 /* Scope switcher (Global + league chips + add) */
 .lb-scopes {
@@ -2428,6 +2454,10 @@ h3.subtitle {
   letter-spacing: -4px;
   pointer-events: none; user-select: none;
 }
+/* Foot action pills never wrap: a long primary label like "Road to Final →"
+   stays a single-line pill so all the buttons read as one consistent set,
+   instead of one chunky multi-line block beside the slim ghost buttons. */
+.step-foot .pill { white-space: nowrap; }
 
 /* ——— Glass pills — the core button language ——— */
 .pill {
@@ -4281,6 +4311,14 @@ input[type=range].mp-range::-moz-range-thumb {
 .step-foot {
   padding-bottom: max(18px, calc(14px + env(safe-area-inset-bottom)));
 }
+/* On phones the foot can hold three actions (Back · Review · Road to Final).
+   Tighten the gap and pill padding so they all fit on one line at the same
+   height — a consistent set, never a wrapped chunky block. */
+@media (max-width: 640px) {
+  .step-foot { gap: 8px; }
+  .step-foot .pill { padding: 12px 14px; font-size: 12px; letter-spacing: .05em; gap: 6px; }
+  .step-foot .pill.sm { padding: 12px 13px; }
+}
 /* Landing hero is inline-styled at height:100vh; override to the dynamic
    viewport on supporting browsers so its bottom CTAs never hide behind the
    mobile address bar. !important is required to beat the inline style. */
@@ -4513,7 +4551,9 @@ input[type=range].mp-range::-moz-range-thumb {
 
 /* ——— Shell chrome: fine-tune on very small screens ——— */
 @media (max-width: 380px) {
-  .shell-body { padding-top: 116px; padding-left: 10px; padding-right: 10px; }
+  /* padding-top is owned by the env-aware !important rule lower in the file
+     (calc(96px + max(14px, safe-area))) so it tracks the notch here too. */
+  .shell-body { padding-left: 10px; padding-right: 10px; }
   .brand-lockup { top: max(8px, env(safe-area-inset-top)); }
   .bl-crest { width: 40px; }
   .bl-name { font-size: 20px; }
@@ -5031,15 +5071,19 @@ input[type=range].mp-range::-moz-range-thumb {
 }
 
 /* ——— Prevent shell-body content from hiding behind tall brand lockup on phone ——— */
-/* Brand lockup + safe-area can reach ~130px on Face ID iPhones; use env() so it
-   adapts automatically. The is-scrolled collapse is delayed 0.2s so it only
-   fires AFTER the header has fully faded out, preventing content from sliding
-   behind a still-visible lockup. */
+/* The lockup is positioned at top:max(14px, safe-area) and is ~91px tall, so its
+   BOTTOM sits at safe-area + ~105px. The scroll pane below must clear that, and
+   the pane top trails shell-body's padding-top by a fixed ~23px. So the padding
+   must grow 1:1 with the safe-area — the old `70px + safe-area` undershot by the
+   lockup's own height, sliding the first line of content (and the header rule)
+   behind the still-visible chrome on Dynamic Island iPhones.
+   `96px + max(14px, safe-area)` tracks the lockup exactly: it yields a constant
+   ~28px gap below the lockup at every inset, and resolves to 110px at safe-area:0
+   so non-notch phones are unchanged. The is-scrolled collapse is delayed 0.2s so
+   it only fires AFTER the header has faded out. */
 @media (max-width: 640px) {
-  /* Brand lockup reaches ~137px on 390px iPhones with 47px safe-area.
-     Use env() so it auto-adapts; base 110px clears on simulator. */
   .shell-body {
-    padding-top: max(110px, calc(70px + env(safe-area-inset-top, 0px))) !important;
+    padding-top: calc(96px + max(14px, env(safe-area-inset-top, 0px))) !important;
   }
   .step-shell.is-scrolled .shell-body {
     padding-top: 14px !important;

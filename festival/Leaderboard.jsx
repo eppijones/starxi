@@ -293,7 +293,16 @@ function Leaderboard({ onEditPicks, onBack }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [leagues, setLeagues] = useState([]);
+  const [codeCopied, setCodeCopied] = useState(false);
   const reqIdRef = useRef(0);
+
+  const copyCode = async (c) => {
+    try {
+      await navigator.clipboard.writeText(c);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 1800);
+    } catch (e) {}
+  };
 
   // Pull the player's leagues (for the scope switcher) whenever they sign in.
   const refreshLeagues = useCallback(async () => {
@@ -381,6 +390,17 @@ function Leaderboard({ onEditPicks, onBack }) {
                   ? data.name
                   : "Global table"}
             </h2>
+            {scope.kind === "league" && scope.code && (
+              <button
+                className={"lb-code-chip" + (codeCopied ? " copied" : "")}
+                onClick={() => copyCode(scope.code)}
+                title="Copy invite code"
+              >
+                <span className="lb-code-chip-label">Invite code</span>
+                <span className="lb-code-chip-val">{scope.code}</span>
+                <span className="lb-code-chip-icon">{codeCopied ? "✓" : "📋"}</span>
+              </button>
+            )}
           </div>
 
           <div className="lb-scopes">
