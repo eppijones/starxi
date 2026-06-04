@@ -858,7 +858,7 @@ function Welcome({ state, setState, onNext, onHistory }) {
                           background: isSel ? "#fff" : "rgba(255,255,255,0.06)",
                           transition: "background 140ms, border-color 140ms"
                         }}>
-                        <span style={{ fontSize: 17, lineHeight: 1 }}>{n.flag}</span>
+                        <span style={{ fontSize: 17, lineHeight: 1, fontFamily: '"Twemoji Country Flags", "Inter", system-ui, sans-serif' }}>{n.flag}</span>
                         <span style={{
                           fontFamily: "Anton, sans-serif", fontSize: 9, letterSpacing: "0.03em",
                           color: isSel ? "#14141A" : "#fff", textTransform: "uppercase",

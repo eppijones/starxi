@@ -40,7 +40,7 @@ function PointsInfoModal({ onClose }) {
               <div className="pts-row neg"><span>Red card</span><span>−3</span></div>
               <div className="pts-row cap"><span>Captain armband</span><span>×2</span></div>
             </div>
-            <p className="pts-note">Lower-rated players earn a ×1.3–×2 gem boost on positive points.</p>
+            <p className="pts-note">Lower-rated players earn a ×1.2–×1.6 gem boost on goals &amp; assists. Your XI scores in the knockouts too, and your nation's deep run pays a bonus (R16 +3 → Champion +25).</p>
           </div>
 
           <div className="pts-block">
@@ -139,12 +139,19 @@ function Predict({ state, setState, onNext, onBack }) {
   const [sub, setSub] = useState(() => rtfFindStartSub(bracket));
   const [ptsInfoOpen, setPtsInfoOpen] = useState(false);
 
-  // Snap the scroll pane back to the top whenever the sub-step changes. Players
-  // jump between rounds by tapping the progress strip at the BOTTOM of the pane,
-  // which used to leave them stranded at the bottom of the next round (or with
-  // the foot buttons out of view). Every new round should open at its title.
+  // Open each round at its OWN content whenever the sub-step changes. Players
+  // jump between rounds by tapping the progress strip at the BOTTOM of the pane;
+  // resetting to the very top stranded them on the shared "Road to the Final"
+  // intro + action row (Points · Skip · Auto-fill) — text they've already read —
+  // instead of the round's title and the picks they came to make. So we scroll
+  // to the top of .rtf-body (its title leads), leaving the header one short
+  // scroll up. useLayoutEffect positions the pane before paint, so there's no
+  // visible jump; it falls back to the very top if the body can't be measured.
+  // The round's own title (Group X / Best 3rd-Placed / Round of 32 …) is now the
+  // FIRST thing in the pane, so opening each sub-step at the top lands exactly on
+  // it — no header to scroll past. Reset on every sub change.
   const scrollRef = useRef(null);
-  useEffect(() => {
+  React.useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = 0;
   }, [sub]);
@@ -341,33 +348,11 @@ function Predict({ state, setState, onNext, onBack }) {
   return (
     <div className="step-screen">
       <div className="step-scroll stagger" ref={scrollRef}>
-        <div className="rtf-head">
-          <div className="ph-titles">
-            <h2 className="title">Road to the Final</h2>
-            <p className="lede">
-              Set the group order, pick which 3rds advance, then click your way through to your champion.
-              {nationObj && (
-                <> Every point earned from <strong>{nationObj.flag} {nationObj.name}</strong> is doubled.</>
-              )}
-            </p>
-          </div>
-          <div className="rtf-head-actions">
-            <button className="btn ghost sm pts-info-btn" onClick={() => setPtsInfoOpen(true)} title="How points work">
-              ℹ Points
-            </button>
-            <button className="btn ghost sm" onClick={() => onNext()}>Skip to confirm</button>
-            <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillAll} title="Auto-rank all groups by FIFA rank, pick the top 8 third-placed teams, and fill every knockout match with the higher-ranked side">
-              ⚡ Auto-fill all
-            </button>
-            {groupsAllDone && luckyDone && (
-              <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillKnockouts} title="Pick the higher-ranked team in every remaining knockout match">
-                ⚡ Auto-fill knockouts
-              </button>
-            )}
-            {madePicks > 0 && <button className="btn ghost sm" onClick={clearAll}>Clear</button>}
-          </div>
-        </div>
-
+        {/* Every round leads with its OWN title. The shared "Road to the Final"
+            intro is gone (you've met it on the prior screens) and the global
+            actions live at the BOTTOM of the pane — see .rtf-actions-bottom
+            below the progress strip — so nothing ever pushes the round content
+            down on entry. The pane simply opens at the top. */}
         <div className="rtf-body" key={sub}>
           {sub >= 12 && (
             <div className="rtf-subhead">
@@ -413,6 +398,25 @@ function Predict({ state, setState, onNext, onBack }) {
           groupsAllDone={groupsAllDone}
           luckyDone={luckyDone}
         />
+
+        {/* Global actions: pinned to the bottom of the scroll so they never
+            push the round title down. Reachable with a short scroll; the per-
+            group Auto-fill/Clear still live up in the group header. */}
+        <div className="rtf-head-actions rtf-actions-bottom">
+          <button className="btn ghost sm pts-info-btn" onClick={() => setPtsInfoOpen(true)} title="How points work">
+            ℹ Points
+          </button>
+          <button className="btn ghost sm" onClick={() => onNext()}>Skip to confirm</button>
+          <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillAll} title="Auto-rank all groups by FIFA rank, pick the top 8 third-placed teams, and fill every knockout match with the higher-ranked side">
+            ⚡ Auto-fill all
+          </button>
+          {groupsAllDone && luckyDone && (
+            <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillKnockouts} title="Pick the higher-ranked team in every remaining knockout match">
+              ⚡ Auto-fill knockouts
+            </button>
+          )}
+          {madePicks > 0 && <button className="btn ghost sm" onClick={clearAll}>Clear</button>}
+        </div>
       </div>
 
       <div className="step-foot">

@@ -64,11 +64,31 @@
   --r-md: 16px;
   --r-lg: 18px;
 
-  /* Anton = display + numbers. Inter = text + UI. */
-  --font-display: "Anton", "Archivo Black", system-ui, sans-serif;
-  --font-text:    "Inter", system-ui, sans-serif;
-  --font-mono:    "Inter", system-ui, sans-serif;
-  --font-num:     "Anton", system-ui, sans-serif;
+  /* Anton = display + numbers. Inter = text + UI.
+     "Twemoji Country Flags" is prepended to every stack so country-flag
+     emoji render on platforms whose system fonts lack them (Windows,
+     many Linux builds). It only carries flag glyphs + is unicode-range
+     scoped (see @font-face below), so it never affects any other text. */
+  --font-display: "Twemoji Country Flags", "Anton", "Archivo Black", system-ui, sans-serif;
+  --font-text:    "Twemoji Country Flags", "Inter", system-ui, sans-serif;
+  --font-mono:    "Twemoji Country Flags", "Inter", system-ui, sans-serif;
+  --font-num:     "Twemoji Country Flags", "Anton", system-ui, sans-serif;
+}
+
+/* ── Cross-platform country flags ──────────────────────────────────────
+   Apple platforms (macOS/iOS) and Android/most Linux ship colour flag
+   glyphs, but Windows' Segoe UI Emoji deliberately omits ALL country
+   flags — so our regional-indicator emoji render blank there. This
+   bundled, self-hosted Twemoji "flags-only" web font (COLR/CPAL colour,
+   ~78 KB) draws them everywhere instead. Its cmap contains ONLY flag
+   codepoints, and unicode-range restricts it to exactly those, so the
+   browser never consults it for letters, numbers or any non-flag emoji.
+   Covers all 48 nations incl. Scotland's gb-sct subdivision flag. */
+@font-face {
+  font-family: "Twemoji Country Flags";
+  src: url("fonts/twemoji-country-flags.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0020-E007F;
 }
 
 * { box-sizing: border-box; }
@@ -110,11 +130,15 @@ body {
 
 .app {
   min-height: 100vh;
+  min-height: 100svh;
   height: 100vh;            /* PROJECT RULE: each screen lives in one viewport */
-  /* dvh tracks the *dynamic* viewport (mobile address-bar collapse/expand) so
-     the pinned Back/Next foot is never pushed under Safari's chrome. Falls
-     back to 100vh on browsers without dvh; identical to vh on desktop. */
-  height: 100dvh;
+  /* svh = the SMALL viewport (browser toolbars showing). Because this app never
+     scrolls the page (each screen pages via the pinned Back/Next foot, with
+     overflow:hidden), the toolbars never retract — so svh is the stable, always-
+     usable height and it guarantees the foot clears Safari's top AND bottom bars.
+     dvh used to push the foot under the bottom toolbar when the address bar sits
+     on top. Falls back to 100vh where svh is unsupported; identical on desktop. */
+  height: 100svh;
   overflow: hidden;         /* no page scroll — screens page via Back/Next */
   display: flex;
   flex-direction: column;
@@ -1066,16 +1090,25 @@ h3.subtitle {
 .xi-side {
   min-height: 0;
   display: flex; flex-direction: column; gap: 10px;
-  overflow: hidden;        /* the right column is fixed-content (no scroll) */
+  /* The pitch shares this column with the formation selector and the captains
+     panel. On short viewports all four rows (FW·MF·DF·GK) plus the captains
+     panel can't fit — so rather than clip the defence + keeper, the column
+     scrolls and the pitch keeps a min-height tall enough to draw every row.
+     This mirrors the mobile YOUR XI tab; bottom-up order (GK at the foot,
+     forwards up top) is preserved. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding-right: 4px;
+  padding-bottom: 8px;
 }
-/* The pitch absorbs any extra column height so the cap-bar always sits flush
-   against the bottom of the grid cell — which keeps the player list's bottom
-   edge (left column) aligned with the cap-bar's bottom edge (right column).
-   The internal .pitch-rows already has min-height + space-between, so growing
-   the outer pitch just stretches the lawn around the rows. */
+/* The pitch absorbs any extra column height so the cap-bar sits flush against
+   the bottom of the grid cell on tall viewports (flex:1 1 auto grows it). The
+   min-height below is the floor that guarantees all four rows are drawn even
+   when the column is too short to grow into — flex-shrink can't pull it below
+   that, so the keeper + defenders are never clipped; .xi-side scrolls instead. */
 .pitch { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .pitch .pitch-rows { flex: 1; }
+.xi-side .pitch { min-height: 440px; }
 .cap-bar { flex-shrink: 0; }
 .xi-side::-webkit-scrollbar { width: 8px; }
 .xi-side::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 99px; }
@@ -1203,10 +1236,13 @@ h3.subtitle {
 }
 .pitch-row { display: flex; justify-content: space-around; align-items: center; gap: 6px; }
 .pitch-slot { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; position: relative; gap: 5px; }
-/* Wrapper that hugs the 50px shirt so the remove × can be anchored to the
-   shirt's top-left corner, independent of how wide the pitch-slot column
-   gets (the GK row stretches a single slot across the full pitch). */
-.slot-shirt { position: relative; width: 50px; height: 50px; }
+/* Wrapper that shrink-wraps the shirt tile so the remove × stays anchored to
+   the tile's top-left corner, independent of how wide the pitch-slot column
+   gets (the GK row stretches a single slot across the full pitch). It MUST hug
+   the tile in both dimensions: a fixed height shorter than the (64px / 70px)
+   tile let the card overflow and paint over the top of the player name below
+   it. inline-flex sizes to the tile at every breakpoint, so they never drift. */
+.slot-shirt { position: relative; display: inline-flex; }
 .pitch-slot.empty { opacity: .7; }
 .pitch-slot.empty::before {
   content: "";
@@ -2338,6 +2374,40 @@ h3.subtitle {
   display: flex; flex-direction: column;
   position: relative;
   z-index: 1;
+  /* The shell itself must NEVER scroll — only the inner panes (.step-scroll,
+     .xi-side, .player-grid) do, and they're clipped below the fixed chrome.
+     Without this the `overflow-x:hidden` rule elsewhere computes overflow-y to
+     `auto`, so a content overflow or an iOS rubber-band could scroll the entire
+     shell — sliding the tabs and pitch up BEHIND the header. Hard no. The fixed
+     chrome and the ::before scrim escape this clip (their containing block is the
+     viewport), so they still paint normally. */
+  overflow: hidden;
+}
+/* ——— Top-chrome scrim ——— */
+/* The fixed brand lockup + step badges + utility cluster are translucent glass
+   with gaps between them. On phones any pane content that scrolls up into that
+   zone (a list overscrolling, a tall pitch, a round's intro) used to show THROUGH
+   the gaps. This fixed layer paints the nation field across the whole chrome band
+   so content dissolves into it instead — a hard guarantee that nothing is ever
+   legible behind the header, on every browser. It sits above the panes (z1) and
+   below the chrome itself (z60); the bottom edge fades so there's no seam, and it
+   clears out the moment the chrome auto-hides on scroll. */
+@media (max-width: 640px) {
+  .step-shell::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: calc(96px + max(14px, env(safe-area-inset-top, 0px)));
+    z-index: 40;
+    pointer-events: none;
+    background:
+      radial-gradient(135% 90% at 50% -20%, rgba(255,255,255,.12) 0%, transparent 52%) top center / 100vw 100vh no-repeat,
+      var(--nation, #15161B);
+    -webkit-mask-image: linear-gradient(180deg, #000 74%, transparent 100%);
+            mask-image: linear-gradient(180deg, #000 74%, transparent 100%);
+    transition: opacity .22s ease;
+  }
+  .step-shell.is-scrolled::before { opacity: 0; }
 }
 /* huge ghost nation nickname behind the content, like the landing */
 .shell-ghost {
@@ -2433,6 +2503,11 @@ h3.subtitle {
 .step-scroll {
   flex: 1; min-height: 0;
   overflow-y: auto; overflow-x: hidden;
+  /* Keep touch scrolls inside this pane — without it, iOS/Android chain the
+     overscroll up to .step-shell and slide content behind the fixed chrome. */
+  overscroll-behavior: contain;
+  /* offsetParent for the round-title scroll positioning in Predict. */
+  position: relative;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,.3) transparent;
   padding-right: 4px;
@@ -2799,10 +2874,23 @@ input[type=range].mp-range::-moz-range-thumb {
 /* ============================================================ */
 
 .rtf-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+/* Past the group stage the intro is dropped, so the head is just the action
+   row — let it sit flush-left and hug the top so the round's own title leads. */
+.rtf-head.no-intro { margin-bottom: 10px; }
+.rtf-head.no-intro .rtf-head-actions { justify-content: flex-start; }
 .rtf-head .ph-titles { min-width: 0; }
 .rtf-head .title { margin: 4px 0; }
 .rtf-head .lede { font-size: 14px; max-width: 64ch; }
 .rtf-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Global actions relocated to the bottom of the pane (below the progress strip)
+   so the round title always leads. A rule above separates them; centred so they
+   read as a deliberate toolbar, not leftover header. */
+.rtf-actions-bottom {
+  justify-content: center;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,.12);
+}
 
 /* Progress strip ------------------------------------------------ */
 .rtf-progress {
@@ -3211,7 +3299,13 @@ input[type=range].mp-range::-moz-range-thumb {
 }
 .kom-team {
   appearance: none; cursor: pointer; text-align: left;
-  display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 7px;
+  /* Flag on the left (spanning both rows), name+rank up top, the points badge
+     on its OWN row underneath — so a wide name (or a big Final card) can never
+     collide with the points, at any width. */
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-areas: "flag meta" "flag pts";
+  align-items: center; column-gap: 7px; row-gap: 3px;
   background: rgba(255,255,255,.06);
   border: 1.5px solid rgba(255,255,255,.2);
   border-radius: 9px;
@@ -3219,6 +3313,10 @@ input[type=range].mp-range::-moz-range-thumb {
   transition: background .12s, border-color .12s, transform .1s;
   min-width: 0;
 }
+.kom-flag { grid-area: flag; align-self: center; }
+.kom-meta { grid-area: meta; }
+.kom-team.empty .kom-name { grid-area: meta; }
+.kom-pts  { grid-area: pts; justify-self: start; }
 .kom-team:hover:not(:disabled) { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.42); }
 .kom-team.empty { opacity: .45; cursor: default; }
 .kom-team.empty .kom-flag { background: rgba(255,255,255,.06); border-radius: 6px; text-align: center; }
@@ -3262,7 +3360,7 @@ input[type=range].mp-range::-moz-range-thumb {
 .rtf-bracket-qf  .kom-flag,
 .rtf-bracket-sf  .kom-flag { font-size: 32px; }
 .rtf-bracket-qf  .kom-team,
-.rtf-bracket-sf  .kom-team { padding: 14px 16px; grid-template-columns: 36px 1fr auto; }
+.rtf-bracket-sf  .kom-team { padding: 14px 16px; grid-template-columns: 36px minmax(0, 1fr); }
 .rtf-bracket-qf  .kom-vs,
 .rtf-bracket-sf  .kom-vs { font-size: 14px; }
 .rtf-bracket-qf  .kom-pts,
@@ -3285,7 +3383,7 @@ input[type=range].mp-range::-moz-range-thumb {
 .rtf-final-card .kom-card { padding: 20px; }
 .rtf-final-card .kom-name { font-size: 20px; }
 .rtf-final-card .kom-flag { font-size: 36px; }
-.rtf-final-card .kom-team { padding: 16px 18px; grid-template-columns: 42px 1fr auto; }
+.rtf-final-card .kom-team { padding: 16px 18px; grid-template-columns: 42px minmax(0, 1fr); }
 
 .rtf-champion {
   background: linear-gradient(180deg, rgba(233,185,73,.18) 0%, rgba(0,0,0,.32) 100%);
@@ -4445,13 +4543,23 @@ input[type=range].mp-range::-moz-range-thumb {
   .dxi-body.mob-pitch .xi-side {
     flex: 1; min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;   /* keep the drag here, not chained to the shell behind the chrome */
     -webkit-overflow-scrolling: touch;
     padding-right: 0;
     padding-bottom: 80px;
   }
-  /* Pitch grows to show all 4 rows at once; overflow visible so GK is never clipped */
-  .dxi-body.mob-pitch .pitch { min-height: 440px; overflow: visible; }
-  .dxi-body.mob-pitch .pitch-rows { min-height: 390px; }
+  /* Pitch grows to show all 4 rows at once. The GK is the last row and
+     space-between pins it to the bottom, so its name label used to spill out of
+     the pitch and hide behind the captain panel. padding-bottom reserves room
+     for that label inside the pitch, and the cap-bar gets a margin so the two
+     never touch — the keeper's name is always fully visible on first load. */
+  .dxi-body.mob-pitch .pitch { min-height: 452px; overflow: visible; }
+  /* Reserve a generous band below the GK row so its name+rating label is always
+     fully inside the pitch, and give the captain panel a clear margin — together
+     ~50px of guaranteed clearance so the keeper is never tucked behind the panel,
+     even with a long name or a shorter viewport. */
+  .dxi-body.mob-pitch .pitch-rows { min-height: 392px; padding-bottom: 40px; }
+  .dxi-body.mob-pitch .cap-bar { margin-top: 24px; }
 
   /* Horizontal scroll for filter rows.
      Must be display:flex (not inline-flex) so the container is constrained
@@ -4821,6 +4929,97 @@ input[type=range].mp-range::-moz-range-thumb {
   font-weight: 700;
 }
 
+/* ——— Stage switcher (Full tournament / Group / Knockouts) ——— */
+.lb-stage-tabs {
+  display: flex; gap: 4px;
+  background: var(--fill-glass); border: 1.5px solid rgba(255,255,255,.18);
+  border-radius: var(--pill); padding: 4px; margin-bottom: 10px; width: fit-content;
+  max-width: 100%; flex-wrap: wrap;
+}
+.lb-stage-tab {
+  appearance: none; border: 0; cursor: pointer; background: transparent;
+  color: rgba(255,255,255,.65); font-family: var(--font-display); font-size: 12px;
+  padding: 6px 14px; border-radius: var(--pill); letter-spacing: .04em;
+  text-transform: uppercase; transition: background .15s, color .15s;
+}
+.lb-stage-tab.sel { background: var(--lime); color: #14141A; font-weight: 700; }
+.lb-stage-note {
+  font-size: 12.5px; color: rgba(255,255,255,.78);
+  background: rgba(198,242,78,.08); border: 1px solid rgba(198,242,78,.22);
+  border-radius: 12px; padding: 8px 12px; margin-bottom: 10px; line-height: 1.4;
+}
+
+/* ——— League banter line ——— */
+.lb-banter {
+  font-size: 13.5px; color: #fff; line-height: 1.4;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px; padding: 9px 13px; margin-bottom: 10px;
+}
+.lb-banter strong { color: var(--lime); }
+
+/* Tiebreak markers */
+.lb-tie {
+  display: inline-grid; place-items: center; width: 15px; height: 15px;
+  font-size: 11px; font-weight: 800; color: rgba(255,255,255,.55);
+  border: 1px solid rgba(255,255,255,.25); border-radius: 4px; margin-left: 6px;
+}
+.lb-legend-tie { opacity: .7; }
+
+/* ——— League management cards (roster + admin) ——— */
+.lb-lg-card {
+  border: 1px solid rgba(255,255,255,.12); border-radius: 14px;
+  background: rgba(255,255,255,.04); margin-bottom: 10px; overflow: hidden;
+}
+.lb-lg-card.open { border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.06); }
+.lb-lg-top {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer;
+}
+.lb-lg-id { flex: 1; min-width: 0; }
+.lb-lg-name {
+  font-family: var(--font-display); font-size: 16px; color: #fff; text-transform: uppercase;
+  letter-spacing: .01em; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lb-lg-id small { color: rgba(255,255,255,.55); font-size: 11.5px; }
+.lb-lg-caret { color: rgba(255,255,255,.5); font-size: 10px; flex-shrink: 0; }
+.lb-lg-body { padding: 4px 14px 14px; display: grid; gap: 12px; }
+
+.lb-invite { display: flex; gap: 8px; flex-wrap: wrap; }
+.lb-invite-cta {
+  font-size: 12.5px; color: rgba(255,255,255,.85);
+  background: rgba(198,242,78,.1); border: 1px solid rgba(198,242,78,.28);
+  border-radius: 12px; padding: 9px 12px; line-height: 1.4;
+}
+.btn.ok, .lb-code.ok { border-color: var(--lime) !important; color: var(--lime) !important; }
+
+.lb-roster .eyebrow { margin-bottom: 6px; }
+.lb-roster-loading { font-size: 12.5px; color: rgba(255,255,255,.5); padding: 4px 0; }
+.lb-roster-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 0;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+.lb-roster-row:last-child { border-bottom: 0; }
+.lb-roster-name { flex: 1; color: #fff; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.lb-owner-badge { font-size: 12px; }
+.lb-kick {
+  appearance: none; cursor: pointer; background: transparent;
+  border: 1px solid rgba(255,120,120,.4); color: #ff9b9b;
+  border-radius: 999px; font-size: 11px; padding: 4px 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .03em;
+}
+.lb-kick:hover { background: rgba(255,90,90,.12); }
+.lb-kick:disabled { opacity: .5; cursor: default; }
+
+.lb-admin { border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; }
+.lb-admin-row, .lb-admin-rename { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lb-danger {
+  appearance: none; cursor: pointer; background: transparent;
+  border: 1px solid rgba(255,120,120,.4); color: #ff9b9b;
+  border-radius: var(--pill); font-size: 12px; padding: 7px 14px; font-weight: 700;
+}
+.lb-danger:hover { background: rgba(255,90,90,.12); }
+.lb-danger:disabled { opacity: .5; cursor: default; }
+.lb-input.sm { padding: 8px 12px; font-size: 14px; flex: 1; min-width: 140px; }
+
 /* ——— RTF nudge banner ——— */
 .lb-rtf-nudge {
   display: flex;
@@ -5081,6 +5280,22 @@ input[type=range].mp-range::-moz-range-thumb {
   .rtf-ladder-head { padding: 8px 14px; }
   .rtf-helpline { margin-top: 8px; font-size: 10px; gap: 6px; }
   .rtf-help-desktop { display: none; }   /* "drag on desktop" is irrelevant on touch */
+
+  /* Best-3rd: trim the header so all 12 flag tiles stay in one view even once
+     the extra "Auto-fill knockouts" button appears. */
+  .rtf-thirds { gap: 9px; }
+  .rtf-thirds-head { padding: 9px 12px; }
+  .rtf-thirds-count { font-size: 24px; }
+  .rtf-thirds-grid { gap: 7px; }
+  .rtf-third { padding: 10px 5px 8px; }
+
+  /* Compact the shared "Road to the Final" intro so each round's working area
+     (ladder, flag grid, knockout board) sits higher and needs less scrolling. */
+  .rtf-head { margin-bottom: 8px; gap: 10px; }
+  .rtf-head .title { font-size: 25px; }
+  .rtf-head .lede { font-size: 12.5px; line-height: 1.38; }
+  .rtf-head-actions { gap: 6px; }
+  .rtf-head-actions .btn.sm { padding: 7px 11px; font-size: 11px; }
 }
 
 /* ——— Share card (step 05 Live): smaller on mobile so it fits one screen ——— */
@@ -5136,4 +5351,15 @@ input[type=range].mp-range::-moz-range-thumb {
   .step-shell.is-scrolled .shell-body::before {
     display: none;
   }
+}
+
+/* Signed-out CTA on the public global table */
+.lb-signin-cta {
+  font-size: 13.5px; color: rgba(255,255,255,.85); line-height: 1.5;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px; padding: 11px 14px; margin-bottom: 14px;
+}
+.lb-link {
+  appearance: none; border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--lime); font: inherit; font-weight: 700; text-decoration: underline;
 }

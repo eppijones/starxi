@@ -185,7 +185,7 @@ function XIShareCard({ state, nation, captain, matchday, opponent, formation, on
 // Tournament status + your running total. Pre-launch this is a countdown card
 // with a stat block showing what's at stake; once the group stage starts it
 // flips to a live state with matches-played and the player's running points.
-function LiveCenter({ state, nation, kickoffMs, now, liveResults }) {
+function LiveCenter({ state, nation, kickoffMs, now, liveResults, liveSim }) {
   const ms = Math.max(0, kickoffMs - now);
   const live = ms === 0;
   const days = Math.floor(ms / 86400000);
@@ -197,18 +197,18 @@ function LiveCenter({ state, nation, kickoffMs, now, liveResults }) {
   const played = liveResults ? liveResults.played || 0 : 0;
   const liveNow = liveResults ? liveResults.live || 0 : 0;
 
-  // Pre-knockout the bracket has no actuals yet, so the prediction subtotal
-  // stays at 0. We still tally so the structure is honest: per-XI event totals
-  // also stay 0 until the live feed surfaces player events.
-  const liveSim = useMemo(
-    () => ({
+  // Prefer the fully-assembled live sim (results + derived bracket + player
+  // events) passed down from the poller, so the player's own Star XI, knockout
+  // and nation-bonus points match the leaderboard. Fall back to results-only.
+  const sim = useMemo(
+    () => liveSim || {
       results: (liveResults && liveResults.results) || {},
       bracket: null,
       playerEvents: null,
-    }),
-    [liveResults]
+    },
+    [liveSim, liveResults]
   );
-  const tally = useMemo(() => window.tallyUser(state, liveSim), [state, liveSim]);
+  const tally = useMemo(() => window.tallyUser(state, sim), [state, sim]);
 
   return (
     <section className="live-center" aria-label="Live Center">
@@ -485,12 +485,23 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
   // (local preview / pre-launch). Drives both the Live Center stat block and
   // the per-nation matchday/opponent shown on the share card.
   const [liveResults, setLiveResults] = useState(null);
+  const [liveSim, setLiveSim] = useState(null);
   useEffect(() => {
     let alive = true;
     const pull = async () => {
-      const payload = await window.fetchLiveResults();
+      const [resultsPayload, statsPayload] = await Promise.all([
+        window.fetchLiveResults(),
+        window.fetchPlayerStats ? window.fetchPlayerStats() : Promise.resolve(null),
+      ]);
       if (!alive) return;
-      setLiveResults(payload ? window.buildLiveResults(payload) : null);
+      setLiveResults(resultsPayload ? window.buildLiveResults(resultsPayload) : null);
+      setLiveSim(
+        resultsPayload && window.assembleLiveSim
+          ? window.assembleLiveSim(resultsPayload, statsPayload, {
+              FIXTURES: window.FIXTURES, PLAYERS: window.PLAYERS, NATIONS: window.NATIONS,
+            })
+          : null
+      );
     };
     pull();
     const t = setInterval(pull, 60000);
@@ -587,6 +598,7 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
               kickoffMs={KICKOFF.getTime()}
               now={now}
               liveResults={liveResults}
+              liveSim={liveSim}
             />
             <LeaguesPreview auth={auth} onLeaderboard={onLeaderboard} />
             {/* Road to the Final — opens as a full-screen modal */}
@@ -873,8 +885,11 @@ function App() {
   const [state, setState] = useState({ ...DEFAULT_STATE, ...(initial?.state || {}) });
   const RESTORABLE = ["welcome", "dreamxi", "predict", "confirm", "live"];
   const savedStep = RESTORABLE.includes(initial?.step) ? initial.step : "welcome";
+  // A league invite deep link (starxi.io/join/CODE) lands straight on the
+  // leaderboard so the invite + auto-join flow is the first thing they see.
+  const pendingJoin = typeof window !== "undefined" && !!window.__STARXI_JOIN;
   const [step, setStep] = useState(
-    watchOn ? "matchwatch" : savedStep
+    pendingJoin ? "leaderboard" : watchOn ? "matchwatch" : savedStep
   );
 
   useEffect(() => {

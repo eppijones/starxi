@@ -22,7 +22,7 @@ function LivePointsModal({ onClose }) {
               <span>Red card</span><span>−3 pts</span>
               <span>Captain</span><span>×2 multiplier</span>
             </div>
-            <div className="pts-info-note">Hidden gems (low form rating) earn a ×1.3–×2 boost on positive points.</div>
+            <div className="pts-info-note">Hidden gems (lower form rating) earn a ×1.2–×1.6 boost on goals &amp; assists. Your XI scores all the way through the knockouts; the GW3 captain keeps the armband.</div>
           </div>
 
           <div className="pts-info-section">

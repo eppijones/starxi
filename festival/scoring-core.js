@@ -14,15 +14,33 @@
 //   • Home-nation 2× boost still applies — every bracket point your nation
 //     earns is doubled.
 //
-// Star XI per-event (unchanged — kept brutally simple on purpose):
-//   goal -> 4, assist -> 3, clean sheet (GK/DF) -> 2, captain -> x2
+// Star XI per-event:
+//   goal -> 5, assist -> 3, clean sheet (GK -> 6 / DF -> 3), win -> 3, draw -> 1,
+//   yellow -> -1, red -> -3, captain -> x2.
+//   • GEM BOOST (attacking only) multiplies a pick's GOAL + ASSIST points when
+//     the player is lower-rated, so a breakout cheap forward can out-score a star.
+//     It deliberately does NOT touch clean-sheet/win/draw points (team-driven, not
+//     individual brilliance) — that closes the "park-the-bus minnow keeper" exploit.
+//
+// Star XI scores across the WHOLE tournament — 3 group matchdays AND the 5
+// knockout rounds (R32, R16, QF, SF, Final), all with the same per-event values:
+//   matchday index  0 1 2 | 3   4   5   6    7
+//   stage           G G G | R32 R16 QF  SF   Final
+// A pick only scores in a knockout round if their nation actually reached it; use
+// your 3 swaps to replace eliminated picks. The GW3 captain's ×2 armband carries
+// through every knockout round (falling back GW2 → GW1 if GW3 is unset).
+//
+// Home-nation DEEP-RUN bonus (Star XI layer, on top of the bracket boost): you
+// earn the value of the FURTHEST round your home nation actually reaches —
+//   R16 +3 · QF +6 · SF +10 · Final +15 · Champion +25 — it escalates each round.
 //
 // tallyUser(state, sim, data) takes the fixtures/players via `data` so it works
-// without browser globals. It returns the same field names as before
+// without browser globals. It returns every field it used to
 // (`predictionPts`, `xiPts`, `bullseyes`, `outcomesRight`, `matchBreakdown`,
-// `xiBreakdown`) — only their *meaning* changes for the prediction layer — so
-// the leaderboard ladder and the Live screen don't have to be rewritten in
-// lock-step.
+// `xiBreakdown`, `bracketDetail`, `total`, `nationCalled`) PLUS a stage split
+// (`xiGroupPts`, `xiKnockoutPts`, `predictionGroupPts`, `predictionKnockoutPts`,
+// `nationBonus`, `groupPts`, `knockoutPts`) so the leaderboard can rank on the
+// full tournament, the group stage, or the knockouts alone — without re-scoring.
 
 (function (root, factory) {
   var api = factory();
@@ -31,6 +49,14 @@
     window.scoreBracket = api.scoreBracket;
     window.scoreEvents = api.scoreEvents;
     window.tallyUser = api.tallyUser;
+    window.nationRunBonus = api.nationRunBonus;
+    window.STARXI_SCORING = {
+      MD_GROUP: api.MD_GROUP,
+      MD_KNOCKOUT: api.MD_KNOCKOUT,
+      MD_ALL: api.MD_ALL,
+      KO_MD_ROUND: api.KO_MD_ROUND,
+      NATION_RUN_PTS: api.NATION_RUN_PTS,
+    };
   }
 })(this, function () {
   // ——— Road-to-the-Final bracket scoring ———
@@ -50,9 +76,43 @@
   var KO_KEYS = ["r32", "r16", "qf", "sf", "final"];
   var KO_SIZES = { r32: 16, r16: 8, qf: 4, sf: 2, final: 1 };
 
+  // ——— Matchday model ———
+  // Star XI player events are keyed by matchday index (0-based) in byMd[]:
+  //   0,1,2 = group MD1–3   3=R32  4=R16  5=QF  6=SF  7=Final (+3rd place)
+  var MD_GROUP = [1, 2, 3];
+  var MD_KNOCKOUT = [4, 5, 6, 7, 8];
+  var MD_ALL = [1, 2, 3, 4, 5, 6, 7, 8];
+  // Which bracket round each knockout matchday corresponds to.
+  var KO_MD_ROUND = { 4: "r32", 5: "r16", 6: "qf", 7: "sf", 8: "final" };
+
+  // Home-nation deep-run bonus (Star XI layer). You earn the value of the
+  // FURTHEST round your home nation actually reaches — escalating each round.
+  var NATION_RUN_PTS = { r16: 3, qf: 6, sf: 10, final: 15, champion: 25 };
+
+  // How far did `nation` actually advance? Returns the bonus points for the
+  // furthest round reached (0 if it didn't make the knockouts / no actuals yet).
+  // advances.r32 holds R32 winners (= teams that REACHED the R16), and so on.
+  function nationRunBonus(actual, nation) {
+    if (!actual || !nation || !actual.advances) return 0;
+    var adv = actual.advances;
+    function reached(roundObj) {
+      if (!roundObj) return false;
+      return Object.keys(roundObj).some(function (k) { return roundObj[k] === nation; });
+    }
+    var champ = (adv.final && (adv.final[0] || adv.final)) || null;
+    if (champ === nation) return NATION_RUN_PTS.champion;     // won the Final
+    if (reached(adv.sf)) return NATION_RUN_PTS.final;         // reached the Final
+    if (reached(adv.qf)) return NATION_RUN_PTS.sf;            // reached the SF
+    if (reached(adv.r16)) return NATION_RUN_PTS.qf;           // reached the QF
+    if (reached(adv.r32)) return NATION_RUN_PTS.r16;          // reached the R16
+    return 0;
+  }
+
   function scoreBracket(prediction, actual, nation) {
     var out = {
       points: 0,
+      groupPoints: 0,
+      knockoutPoints: 0,
       bullseyes: 0,
       advancesRight: 0,
       groupBreakdown: [],
@@ -80,6 +140,7 @@
       var perfect = hits === 4 && pred.filter(Boolean).length === 4;
       if (perfect) out.bullseyes++;
       out.points += pts;
+      out.groupPoints += pts;
       out.groupBreakdown.push({ group: g, hits: hits, perfect: perfect, points: pts });
     });
 
@@ -117,6 +178,7 @@
         }
       }
       out.points += pts;
+      out.knockoutPoints += pts;
       out.advancesRight += hits;
       out.roundBreakdown.push({ round: round, hits: hits, total: slots, points: pts });
       // Picking the right champion is a one-shot — also count as a bullseye for
@@ -132,17 +194,21 @@
   //
   // Events shape: { goals, assists, sheets, wins, draws, yellows, reds }
   //
-  // GEM BOOST — lower-rated players earn more on every positive point so picking
-  // a 6.0-rated hidden gem who performs can beat the Star XI:
-  //   form ≥ 8.0  → ×1.0 (no boost)
-  //   form 7.0–7.9 → ×1.3 (Solid Pick)
-  //   form 6.0–6.9 → ×1.5 (Hidden Gem)
-  //   form  < 6.0  → ×2.0 (Wild Card)
-  // The boost multiplies POSITIVE points only; card deductions always sting.
+  // GEM BOOST (rebalanced) — lower-rated players earn a multiplier on their
+  // ATTACKING returns (goals + assists) only, so a breakout cheap forward can
+  // out-score a superstar without making elite picks strictly worse:
+  //   form ≥ 8.0   → ×1.0 (Star)
+  //   form 7.0–7.9 → ×1.2 (Solid Pick)
+  //   form 6.0–6.9 → ×1.4 (Hidden Gem)
+  //   form  < 6.0  → ×1.6 (Wild Card)
+  // Why attack-only: clean sheets / wins / draws are team-driven, not individual
+  // brilliance. Boosting them rewarded stacking weak keepers behind a park-the-bus
+  // minnow (sheet ×6 ×2.0 = 12) — an inverted incentive. Defensive and result
+  // points are now flat; card deductions always sting (never boosted).
   var GEM_THRESHOLDS = [
-    { below: 6.0, mult: 2.0 },
-    { below: 7.0, mult: 1.5 },
-    { below: 8.0, mult: 1.3 },
+    { below: 6.0, mult: 1.6 },
+    { below: 7.0, mult: 1.4 },
+    { below: 8.0, mult: 1.2 },
   ];
   function gemMult(form) {
     for (var i = 0; i < GEM_THRESHOLDS.length; i++) {
@@ -160,20 +226,20 @@
     var yc = events.yellows || 0;
     var rc = events.reds    || 0;
 
-    // Positive pts
-    var pos = g * 5 + a * 3;
-    if (player.pos === "GK") pos += s * 6;
-    else if (player.pos === "DF") pos += s * 3;
-    pos += w * 3 + d * 1;
-
-    // Gem boost on positive pts
+    // Attacking pts — gem-boosted (rounded so the boost can't leak fractions).
     var form = (player && typeof player.form === "number") ? player.form : 8.0;
-    pos = Math.round(pos * gemMult(form));
+    var attack = Math.round((g * 5 + a * 3) * gemMult(form));
 
-    // Cards always sting (no boost)
+    // Defensive + result pts — flat, never boosted.
+    var flat = 0;
+    if (player.pos === "GK") flat += s * 6;
+    else if (player.pos === "DF") flat += s * 3;
+    flat += w * 3 + d * 1;
+
+    // Cards always sting (no boost).
     var neg = yc * 1 + rc * 3;
 
-    return pos - neg;
+    return attack + flat - neg;
   }
 
   // ——— Full per-user tally ———
@@ -221,10 +287,22 @@
       return cur;
     }
 
-    var xiPts = 0;
+    // Captain for a given matchday. Group MDs use the per-GW captain (or the
+    // single captain). Knockout MDs (4–8) all wear the GW3 armband — it "stays on
+    // for the knockouts" — falling back GW2 → GW1 → single captain if GW3 unset.
+    var koCaptain = captainPlus
+      ? (captainByMd[3] || captainByMd[2] || captainByMd[1] || captain)
+      : captain;
+    function captainForMd(md) {
+      if (md >= 4) return koCaptain;
+      return captainPlus ? captainByMd[md] : captain;
+    }
+
+    var xiGroupPts = 0;
+    var xiKnockoutPts = 0;
     var xiBreakdown = picks.map(function (originalId) {
       var total = 0;
-      var mdLines = [1, 2, 3].map(function (md) {
+      var mdLines = MD_ALL.map(function (md) {
         var activeId = activeIdAt(originalId, md);
         var p = byId[activeId];
         if (!p) {
@@ -237,15 +315,20 @@
         var pe = sim && sim.playerEvents && sim.playerEvents[p.id];
         var ev = (pe && pe.byMd && pe.byMd[md - 1]) || { goals: 0, assists: 0, sheets: 0 };
         var pts = scoreEvents(p, ev);
-        var capId = captainPlus ? captainByMd[md] : captain;
+        var capId = captainForMd(md);
         var isCap = !!capId && (capId === activeId || capId === originalId);
         if (isCap) pts *= 2;
         total += pts;
+        if (md >= 4) xiKnockoutPts += pts; else xiGroupPts += pts;
         return { md: md, player: p, events: ev, pts: pts, isCap: isCap };
       });
-      xiPts += total;
       return { slotId: originalId, mdLines: mdLines, total: total };
     });
+
+    // Home-nation deep-run bonus (Star XI layer) — counts as knockout points.
+    var nationBonus = nationRunBonus((sim && sim.bracket) || null, nation);
+    xiKnockoutPts += nationBonus;
+    var xiPts = xiGroupPts + xiKnockoutPts;
 
     // matchBreakdown is repurposed: a flat row-list of bracket "lines" the Live
     // screen renders as the prediction breakdown. Each row carries enough to
@@ -280,6 +363,15 @@
       matchBreakdown: matchBreakdown,
       xiBreakdown: xiBreakdown,
       bracketDetail: br,    // group + round breakdown, for the Live/locked UI
+
+      // ——— Stage split (so the leaderboard can rank on any stage × mode) ———
+      xiGroupPts: xiGroupPts,                  // Star XI points from group MD1–3
+      xiKnockoutPts: xiKnockoutPts,            // Star XI knockout pts (incl. nation bonus)
+      nationBonus: nationBonus,                // home-nation deep-run bonus (subset of above)
+      predictionGroupPts: br.groupPoints,      // bracket group-standings points
+      predictionKnockoutPts: br.knockoutPoints,// bracket knockout-advance points
+      groupPts: xiGroupPts + br.groupPoints,           // full group-stage haul
+      knockoutPts: xiKnockoutPts + br.knockoutPoints,  // full knockout haul
     };
   }
 
@@ -287,5 +379,13 @@
     scoreBracket: scoreBracket,
     scoreEvents: scoreEvents,
     tallyUser: tallyUser,
+    nationRunBonus: nationRunBonus,
+    // Constants other modules (leaderboard, sim, UI) should share rather than
+    // re-declare, so the matchday model + bonus table can never drift.
+    MD_GROUP: MD_GROUP,
+    MD_KNOCKOUT: MD_KNOCKOUT,
+    MD_ALL: MD_ALL,
+    KO_MD_ROUND: KO_MD_ROUND,
+    NATION_RUN_PTS: NATION_RUN_PTS,
   };
 });

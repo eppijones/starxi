@@ -56,6 +56,7 @@
     if (opts.code) qs.push("code=" + encodeURIComponent(opts.code));
     if (opts.limit) qs.push("limit=" + encodeURIComponent(opts.limit));
     if (opts.mode) qs.push("mode=" + encodeURIComponent(opts.mode));
+    if (opts.stage) qs.push("stage=" + encodeURIComponent(opts.stage));
     const url = "/api/leaderboard" + (qs.length ? "?" + qs.join("&") : "");
     try {
       const r = await authedFetch(url, { method: "GET" });
@@ -95,19 +96,38 @@
       return { ok: false, error: String(e) };
     }
   }
+  // GET one league's detail incl. its member roster (members-only): the server
+  // body { ok, league:{ code, name, memberCount, owner, isMember, members:[…] } }.
+  async function wcxiLeagueDetail(code) {
+    try {
+      const r = await authedFetch("/api/league?code=" + encodeURIComponent(code), { method: "GET" });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) return Object.assign({ ok: false, status: r.status }, j || {});
+      return Object.assign({ ok: true }, j);
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }
   const wcxiCreateLeague = (name) => wcxiLeagueAction("create", { name: name });
   const wcxiJoinLeague = (code) => wcxiLeagueAction("join", { code: code });
   const wcxiLeaveLeague = (code) => wcxiLeagueAction("leave", { code: code });
   const wcxiToggleLeagueRtf = (code) => wcxiLeagueAction("toggleRtf", { code: code });
+  const wcxiRenameLeague = (code, name) => wcxiLeagueAction("rename", { code: code, name: name });
+  const wcxiRemoveMember = (code, member) => wcxiLeagueAction("remove", { code: code, member: member });
+  const wcxiDeleteLeague = (code) => wcxiLeagueAction("delete", { code: code });
 
   Object.assign(window, {
     wcxiSaveEntry,
     wcxiLoadEntry,
     wcxiLeaderboard,
     wcxiLeagues,
+    wcxiLeagueDetail,
     wcxiCreateLeague,
     wcxiJoinLeague,
     wcxiLeaveLeague,
     wcxiToggleLeagueRtf,
+    wcxiRenameLeague,
+    wcxiRemoveMember,
+    wcxiDeleteLeague,
   });
 })();

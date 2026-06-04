@@ -36,9 +36,25 @@
     }
   }
 
+  // Fetch the balldontlie player-stats proxy (goals/assists/clean sheets).
+  // Always resolves; null on any failure so scoring degrades to results-only.
+  async function fetchPlayerStats(timeoutMs = 6000) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      const r = await fetch("/api/player-stats", { signal: ctrl.signal, headers: { accept: "application/json" } });
+      clearTimeout(t);
+      if (!r.ok) return null;
+      return await r.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
   // WC_TLA_ALIAS / __wcPairKey are set by results-map.js (loaded before this).
   Object.assign(window, {
     buildLiveResults,
     fetchLiveResults,
+    fetchPlayerStats,
   });
 })();

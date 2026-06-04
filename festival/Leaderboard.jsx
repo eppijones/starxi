@@ -1,27 +1,61 @@
 // WORLD CUP XI — leaderboard screen (global + private mini-leagues).
 //
 // Talks to the server-scored endpoints:
-//   window.wcxiLeaderboard({ code?, limit? })  -> ranked table for a scope
-//   window.wcxiLeagues()                        -> the player's leagues
-//   window.wcxiCreateLeague / JoinLeague / LeaveLeague
+//   window.wcxiLeaderboard({ code?, limit?, mode?, stage? })  -> ranked table
+//   window.wcxiLeagues()                                       -> the player's leagues
+//   window.wcxiLeagueDetail(code)                              -> league + member roster
+//   window.wcxiCreate/Join/Leave/Rename/RemoveMember/DeleteLeague/ToggleLeagueRtf
+//
+// Three ranking dimensions the player controls:
+//   scope  — Global vs each private league (the chips)
+//   stage  — Full tournament | Group stage | Knockouts (the late-join-friendly board)
+//   mode   — Combined (Star XI + Road) | Star XI only
 //
 // Everything degrades gracefully: signed-out players get a sign-in nudge, and
 // when storage isn't provisioned yet (local preview / pre-launch) we show a
 // friendly "goes live at kickoff" panel instead of an error.
 
-function LbRow({ row, mode }) {
+// Shareable deep link for a league. Parsed back on load by the app bootstrap.
+function lbInviteUrl(code) {
+  var origin = (typeof location !== "undefined" && location.origin) || "https://starxi.io";
+  return origin + "/join/" + code;
+}
+
+async function lbCopy(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { return false; }
+}
+
+function LbRow({ row, mode, stage, tied }) {
   const cls = "league-row" + (row.isYou ? " you" : "");
+  // Resolve the Star XI / Road / nation split for the active stage so the
+  // sub-line always reflects what the row is actually ranked on.
+  let xi, road, nation;
+  if (stage === "group") {
+    xi = row.xiGroupPts || 0;
+    road = (row.groupPts || 0) - xi;
+    nation = 0;
+  } else if (stage === "knockout") {
+    nation = row.nationBonus || 0;
+    xi = (row.xiKnockoutPts || 0) - nation; // player KO pts (nation bonus shown separately)
+    road = (row.knockoutPts || 0) - (row.xiKnockoutPts || 0);
+  } else {
+    xi = row.xiPts || 0;
+    road = row.predictionPts || 0;
+    nation = 0;
+  }
   const bits = [];
   if (mode === "combined") {
-    if (row.xiPts > 0) bits.push(`${row.xiPts} XI`);
-    if (row.predictionPts > 0) bits.push(`+${row.predictionPts} Road`);
+    if (xi > 0) bits.push(`${xi} XI`);
+    if (road > 0) bits.push(`+${road} Road`);
+    if (nation > 0) bits.push(`+${nation}🏴 nation`);
     if (row.bullseyes) bits.push(`${row.bullseyes}★`);
   } else {
-    if (row.predictionPts > 0) bits.push(`+${row.predictionPts} Road bonus`);
+    if (road > 0) bits.push(`+${road} Road bonus`);
+    if (nation > 0) bits.push(`+${nation}🏴 nation`);
     if (row.bullseyes) bits.push(`${row.bullseyes} perfect`);
   }
   const sub = bits.join(" · ") || (mode === "xionly" ? "Star XI only" : "no picks yet");
-  const ultimate = mode === "combined" && row.rank === 1 && row.xiPts > 0 && row.predictionPts > 0;
+  const ultimate = mode === "combined" && stage === "all" && row.rank === 1 && row.xiPts > 0 && row.predictionPts > 0;
   return (
     <div className={cls}>
       <span className="rank">{row.rank}</span>
@@ -30,6 +64,7 @@ function LbRow({ row, mode }) {
         {ultimate && (
           <span className="lb-crown" title="Ultimate champion: tops the table with a strong XI and Road picks">👑</span>
         )}
+        {tied && <span className="lb-tie" title="Tied on points — broken by perfect calls (★), then who locked in first">=</span>}
         <small>{sub}</small>
       </span>
       <span className="pts">{row.pts}</span>
@@ -37,7 +72,33 @@ function LbRow({ row, mode }) {
   );
 }
 
-function LbTable({ data, loading, onRefresh, mode, onModeChange, leagueRtfEnabled }) {
+// Light, no-snapshot-needed banter from the current table: who leads and by how
+// much (the "biggest mover" idea needs round-over-round history, which we don't
+// persist yet — so we lead with the live race instead).
+function LbBanter({ data }) {
+  const top = (data && data.top) || [];
+  if (top.length < 1) return null;
+  const leader = top[0];
+  const second = top[1];
+  let line;
+  if (top.length === 1) {
+    line = <>🏆 <strong>{leader.isYou ? "You" : leader.name}</strong> {leader.isYou ? "are" : "is"} out in front — invite a rival.</>;
+  } else if (leader.pts === second.pts) {
+    line = <>🔥 It's all square at the top — <strong>{leader.isYou ? "you" : leader.name}</strong> and <strong>{second.isYou ? "you" : second.name}</strong> tied on {leader.pts}.</>;
+  } else {
+    const gap = leader.pts - second.pts;
+    line = <>🏆 <strong>{leader.isYou ? "You" : leader.name}</strong> lead{leader.isYou ? "" : "s"} by <strong>{gap}</strong> {gap === 1 ? "pt" : "pts"}.</>;
+  }
+  return <div className="lb-banter">{line}</div>;
+}
+
+const LB_STAGES = [
+  { key: "all", label: "Full tournament" },
+  { key: "group", label: "Group stage" },
+  { key: "knockout", label: "Knockouts" },
+];
+
+function LbTable({ data, loading, onRefresh, mode, onModeChange, stage, onStageChange, leagueRtfEnabled }) {
   if (loading && !data) {
     return <div className="empty-state">Loading the table…</div>;
   }
@@ -73,6 +134,7 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, leagueRtfEnable
   const youInTop = !!(you && top.some((r) => r.isYou));
   const played = data.played || 0;
   const activeMode = data.mode || mode;
+  const activeStage = data.stage || stage;
   const rtfLocked = leagueRtfEnabled === false;
 
   return (
@@ -84,11 +146,28 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, leagueRtfEnable
         <span className="lb-dot">·</span>
         <span>
           {played > 0
-            ? <><strong>{played}</strong>/72 matches played</>
+            ? <><strong>{played}</strong> matches played</>
             : "no matches played yet"}
         </span>
         <button className="lb-refresh" onClick={onRefresh} title="Refresh">↻</button>
       </div>
+
+      {/* Stage switcher — full tournament / group / knockouts */}
+      <div className="lb-stage-tabs">
+        {LB_STAGES.map((s) => (
+          <button
+            key={s.key}
+            className={"lb-stage-tab" + (activeStage === s.key ? " sel" : "")}
+            onClick={() => onStageChange(s.key)}
+          >{s.label}</button>
+        ))}
+      </div>
+
+      {activeStage === "knockout" && (
+        <div className="lb-stage-note">
+          🏟️ Scores from the Round of 32 onward — so anyone who joined mid-tournament competes here on a level field.
+        </div>
+      )}
 
       {/* Mode switcher — hidden when league has RTF disabled (forced xionly) */}
       {!rtfLocked && (
@@ -104,6 +183,8 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, leagueRtfEnable
         </div>
       )}
 
+      <LbBanter data={data} />
+
       {/* Nudge: you have no Road-to-Final picks but others might */}
       {you && you.predictionPts === 0 && activeMode !== "xionly" && !rtfLocked && (
         <div className="lb-rtf-nudge">
@@ -118,49 +199,228 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, leagueRtfEnable
         </div>
       ) : (
         <div className="lb-rows">
-          {top.map((r) => (
-            <LbRow key={r.rank + ":" + r.name} row={r} mode={activeMode} />
+          {top.map((r, i) => (
+            <LbRow
+              key={r.rank + ":" + r.name}
+              row={r}
+              mode={activeMode}
+              stage={activeStage}
+              tied={i > 0 && top[i - 1].pts === r.pts}
+            />
           ))}
           {/* Pin the player's own row when they're outside the visible top N. */}
           {you && !youInTop && (
             <>
               <div className="lb-gap">⋯</div>
-              <LbRow row={you} mode={activeMode} />
+              <LbRow row={you} mode={activeMode} stage={activeStage} />
             </>
           )}
         </div>
       )}
 
       <p className="lb-legend">
+        {activeStage === "knockout"
+          ? <>Knockout race — Star XI knockout points, your <strong>nation's deep run</strong> 🏴, and Road-to-the-Final advances. </>
+          : activeStage === "group"
+            ? <>Group-stage race — Star XI group points and your group-table calls. </>
+            : null}
         {activeMode === "xionly"
-          ? <>Ranked on <strong>Star XI points</strong> only — Road-to-the-Final picks not counted here.</>
-          : <>Ranked on <strong>combined points</strong> (Star XI + Road to the Final). Top both and you're the <strong>ultimate champion</strong> 👑.</>
+          ? <>Ranked on <strong>Star XI points</strong>; Road picks excluded.</>
+          : <>Ranked on <strong>combined points</strong> (Star XI + Road). Top both for the <strong>ultimate champion</strong> 👑.</>
         }
+        {" "}<span className="lb-legend-tie">Ties break on perfect calls (★), then who locked in first.</span>
       </p>
     </div>
   );
 }
 
-function LbManage({ leagues, onCreated, onJoined, onLeft, onRtfToggled, onClose }) {
+// One league's card in the manage view: invite tools + roster + (owner) admin.
+function LbLeagueCard({ league, onChanged, onLeft }) {
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(null);
+  const [renaming, setRenaming] = useState(false);
+  const [newName, setNewName] = useState(league.name);
+
+  const owner = !!league.owner;
+
+  const loadDetail = useCallback(async () => {
+    setLoading(true);
+    const r = await window.wcxiLeagueDetail(league.code);
+    setLoading(false);
+    if (r && r.ok && r.league) setDetail(r.league);
+  }, [league.code]);
+
+  useEffect(() => { if (open && !detail) loadDetail(); }, [open, detail, loadDetail]);
+
+  const copy = async (key, text) => {
+    if (await lbCopy(text)) { setCopied(key); setTimeout(() => setCopied(null), 1600); }
+  };
+  const rename = async () => {
+    const nm = newName.trim();
+    if (!nm || nm === league.name) { setRenaming(false); return; }
+    setBusy(true);
+    const r = await window.wcxiRenameLeague(league.code, nm);
+    setBusy(false);
+    setRenaming(false);
+    if (r && r.ok) onChanged && onChanged();
+  };
+  const removeMember = async (token, name) => {
+    if (!confirm(`Remove ${name} from ${league.name}?`)) return;
+    setBusy(true);
+    const r = await window.wcxiRemoveMember(league.code, token);
+    setBusy(false);
+    if (r && r.ok) { await loadDetail(); onChanged && onChanged(); }
+  };
+  const toggleRtf = async () => {
+    setBusy(true);
+    const r = await window.wcxiToggleLeagueRtf(league.code);
+    setBusy(false);
+    if (r && r.ok) onChanged && onChanged();
+  };
+  const del = async () => {
+    if (!confirm(`Delete "${league.name}" for everyone? This can't be undone.`)) return;
+    setBusy(true);
+    const r = await window.wcxiDeleteLeague(league.code);
+    setBusy(false);
+    if (r && r.ok) onChanged && onChanged();
+  };
+  const leave = async () => {
+    if (!confirm(`Leave "${league.name}"?`)) return;
+    setBusy(true);
+    const r = await window.wcxiLeaveLeague(league.code);
+    setBusy(false);
+    if (r && r.ok) onLeft && onLeft(league.code);
+  };
+
+  const members = (detail && detail.members) || [];
+  const solo = league.memberCount <= 1;
+
+  return (
+    <div className={"lb-lg-card" + (open ? " open" : "")}>
+      <div className="lb-lg-top" onClick={() => setOpen((v) => !v)}>
+        <div className="lb-lg-id">
+          <span className="lb-lg-name">{league.name}</span>
+          <small>
+            {league.memberCount} {league.memberCount === 1 ? "member" : "members"}
+            {owner ? " · you own this" : ""}
+            {league.roadToFinalEnabled === false ? " · Star XI only" : ""}
+          </small>
+        </div>
+        <button
+          className={"lb-code" + (copied === "code" ? " ok" : "")}
+          onClick={(e) => { e.stopPropagation(); copy("code", league.code); }}
+          title="Copy join code"
+        >{copied === "code" ? "✓ copied" : league.code}</button>
+        <span className="lb-lg-caret">{open ? "▲" : "▼"}</span>
+      </div>
+
+      {open && (
+        <div className="lb-lg-body">
+          {/* Invite tools */}
+          <div className="lb-invite">
+            <button
+              className={"btn ghost sm" + (copied === "link" ? " ok" : "")}
+              disabled={busy}
+              onClick={() => copy("link", lbInviteUrl(league.code))}
+            >{copied === "link" ? "✓ Link copied" : "🔗 Copy invite link"}</button>
+            <button
+              className={"btn ghost sm" + (copied === "code2" ? " ok" : "")}
+              disabled={busy}
+              onClick={() => copy("code2", league.code)}
+            >{copied === "code2" ? "✓ Code copied" : "📋 Copy code"}</button>
+          </div>
+
+          {solo && (
+            <div className="lb-invite-cta">
+              🎉 It's just you so far — share the link above and the league comes alive.
+            </div>
+          )}
+
+          {/* Roster */}
+          <div className="lb-roster">
+            <div className="eyebrow">Members</div>
+            {loading && !detail ? (
+              <div className="lb-roster-loading">Loading members…</div>
+            ) : (
+              members.map((m) => (
+                <div className="lb-roster-row" key={m.token}>
+                  <span className="lb-roster-name">
+                    {m.you ? "You" : m.name}
+                    {m.owner && <span className="lb-owner-badge" title="League owner">👑</span>}
+                  </span>
+                  {owner && !m.you && (
+                    <button
+                      className="lb-kick"
+                      disabled={busy}
+                      onClick={() => removeMember(m.token, m.name)}
+                      title={`Remove ${m.name}`}
+                    >Remove</button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Owner admin */}
+          {owner ? (
+            <div className="lb-admin">
+              {renaming ? (
+                <div className="lb-admin-rename">
+                  <input
+                    className="lb-input sm"
+                    value={newName}
+                    maxLength={40}
+                    autoFocus
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") setRenaming(false); }}
+                  />
+                  <button className="btn gold sm" disabled={busy} onClick={rename}>Save</button>
+                  <button className="btn ghost sm" disabled={busy} onClick={() => { setRenaming(false); setNewName(league.name); }}>Cancel</button>
+                </div>
+              ) : (
+                <div className="lb-admin-row">
+                  <button className="btn ghost sm" disabled={busy} onClick={() => { setNewName(league.name); setRenaming(true); }}>✎ Rename</button>
+                  <button
+                    className={"lb-rtf-toggle" + (league.roadToFinalEnabled !== false ? " on" : " off")}
+                    disabled={busy}
+                    onClick={toggleRtf}
+                    title={league.roadToFinalEnabled !== false ? "Road-to-the-Final scoring ON" : "Road-to-the-Final scoring OFF"}
+                  >{league.roadToFinalEnabled !== false ? "🗺️ Road on" : "🗺️ Road off"}</button>
+                  <span className="grow" />
+                  <button className="lb-danger" disabled={busy} onClick={del}>Delete league</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="lb-admin-row">
+              <span className="grow" />
+              <button className="lb-leave" disabled={busy} onClick={leave}>Leave league</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LbManage({ leagues, onChanged, onCreated, onJoined, onLeft, onClose }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [copied, setCopied] = useState(null);
-  const [newCode, setNewCode] = useState(null); // code of freshly-created league
+  const [newCode, setNewCode] = useState(null); // freshly-created league
 
   const create = async () => {
     if (busy) return;
     setBusy(true); setMsg(null);
     const r = await window.wcxiCreateLeague(name.trim() || "My League");
     setBusy(false);
-    if (r && r.ok) {
-      setName("");
-      setNewCode(r.code);
-      onCreated && onCreated(r.code);
-    } else {
-      setMsg("Couldn't create the league. Try again.");
-    }
+    if (r && r.ok) { setName(""); setNewCode(r.code); onCreated && onCreated(r.code); }
+    else setMsg("Couldn't create the league. Try again.");
   };
   const join = async () => {
     if (busy) return;
@@ -173,27 +433,8 @@ function LbManage({ leagues, onCreated, onJoined, onLeft, onRtfToggled, onClose 
     else if (r && r.error === "no_such_league") setMsg("No league with that code.");
     else setMsg("Couldn't join. Check the code and try again.");
   };
-  const leave = async (c) => {
-    if (busy) return;
-    if (!confirm("Leave this league?")) return;
-    setBusy(true);
-    const r = await window.wcxiLeaveLeague(c);
-    setBusy(false);
-    if (r && r.ok) onLeft && onLeft(c);
-  };
-  const toggleRtf = async (c) => {
-    if (busy) return;
-    setBusy(true);
-    const r = await window.wcxiToggleLeagueRtf(c);
-    setBusy(false);
-    if (r && r.ok) onRtfToggled && onRtfToggled(c, r.roadToFinalEnabled);
-  };
-  const copy = async (c) => {
-    try {
-      await navigator.clipboard.writeText(c);
-      setCopied(c);
-      setTimeout(() => setCopied(null), 1800);
-    } catch (e) {}
+  const copy = async (key, text) => {
+    if (await lbCopy(text)) { setCopied(key); setTimeout(() => setCopied(null), 1600); }
   };
 
   return (
@@ -201,7 +442,7 @@ function LbManage({ leagues, onCreated, onJoined, onLeft, onRtfToggled, onClose 
       <div className="lb-manage-grid">
         <div className="lb-form card flat">
           <div className="eyebrow">Start a league</div>
-          <p className="lb-form-note">Create a private table and share the code with friends.</p>
+          <p className="lb-form-note">Create a private table and share the link with friends.</p>
           <input
             className="lb-input"
             placeholder="League name"
@@ -212,26 +453,25 @@ function LbManage({ leagues, onCreated, onJoined, onLeft, onRtfToggled, onClose 
           />
           <button className="btn gold sm" disabled={busy} onClick={create}>Create league</button>
 
-          {/* League code reveal — shown immediately after creation */}
           {newCode && (
             <div className="lb-new-code-reveal">
-              <div className="lb-new-code-label">League created! Share this code:</div>
+              <div className="lb-new-code-label">League created! Share to invite friends:</div>
               <button
-                className={"lb-new-code-btn" + (copied === newCode ? " copied" : "")}
-                onClick={() => copy(newCode)}
-                title="Copy join code"
+                className={"lb-new-code-btn" + (copied === "nl" ? " copied" : "")}
+                onClick={() => copy("nl", lbInviteUrl(newCode))}
+                title="Copy invite link"
               >
                 <span className="lb-new-code-val">{newCode}</span>
-                <span className="lb-new-code-copy">{copied === newCode ? "✓ copied" : "📋 copy"}</span>
+                <span className="lb-new-code-copy">{copied === "nl" ? "✓ link copied" : "🔗 copy link"}</span>
               </button>
-              <div className="lb-new-code-hint">Friends paste this in "Join a league"</div>
+              <div className="lb-new-code-hint">Anyone with the link drops straight into your league.</div>
             </div>
           )}
         </div>
 
         <div className="lb-form card flat">
           <div className="eyebrow">Join a league</div>
-          <p className="lb-form-note">Got a code from a friend? Drop it in.</p>
+          <p className="lb-form-note">Got a code or link from a friend? Drop it in.</p>
           <input
             className="lb-input mono"
             placeholder="e.g. 7KQ4P"
@@ -250,31 +490,7 @@ function LbManage({ leagues, onCreated, onJoined, onLeft, onRtfToggled, onClose 
         <div className="lb-mylist">
           <div className="eyebrow" style={{ marginBottom: 8 }}>Your leagues</div>
           {leagues.map((l) => (
-            <div className="lb-mylist-row" key={l.code}>
-              <div className="lb-ml-name">
-                {l.name}
-                <small>
-                  {l.memberCount} {l.memberCount === 1 ? "member" : "members"}
-                  {l.owner ? " · you own this" : ""}
-                </small>
-              </div>
-              <button className="lb-code" onClick={() => copy(l.code)} title="Copy join code">
-                {copied === l.code ? "✓" : l.code}
-              </button>
-              {l.owner && (
-                <button
-                  className={"lb-rtf-toggle" + (l.roadToFinalEnabled !== false ? " on" : " off")}
-                  onClick={() => toggleRtf(l.code)}
-                  disabled={busy}
-                  title={l.roadToFinalEnabled !== false
-                    ? "Road-to-the-Final scoring is ON — click to disable"
-                    : "Road-to-the-Final scoring is OFF — click to enable"}
-                >
-                  {l.roadToFinalEnabled !== false ? "🗺️ Road on" : "🗺️ Road off"}
-                </button>
-              )}
-              <button className="lb-leave" onClick={() => leave(l.code)} title="Leave league">Leave</button>
-            </div>
+            <LbLeagueCard key={l.code} league={l} onChanged={onChanged} onLeft={onLeft} />
           ))}
         </div>
       )}
@@ -290,21 +506,18 @@ function Leaderboard({ onEditPicks, onBack }) {
   const auth = useClerkAuth();
   const [scope, setScope] = useState({ kind: "global", code: null }); // or {kind:"league",code} | {kind:"manage"}
   const [lbMode, setLbMode] = useState("combined"); // "combined" | "xionly"
+  const [lbStage, setLbStage] = useState("all");     // "all" | "group" | "knockout"
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [leagues, setLeagues] = useState([]);
   const [codeCopied, setCodeCopied] = useState(false);
   const reqIdRef = useRef(0);
+  const joinHandledRef = useRef(false);
 
   const copyCode = async (c) => {
-    try {
-      await navigator.clipboard.writeText(c);
-      setCodeCopied(true);
-      setTimeout(() => setCodeCopied(false), 1800);
-    } catch (e) {}
+    if (await lbCopy(lbInviteUrl(c))) { setCodeCopied(true); setTimeout(() => setCodeCopied(false), 1800); }
   };
 
-  // Pull the player's leagues (for the scope switcher) whenever they sign in.
   const refreshLeagues = useCallback(async () => {
     if (!auth.signedIn) { setLeagues([]); return; }
     const r = await window.wcxiLeagues();
@@ -313,22 +526,42 @@ function Leaderboard({ onEditPicks, onBack }) {
 
   useEffect(() => { refreshLeagues(); }, [refreshLeagues]);
 
-  // Load the table for the active scope.
+  // Deep-link join: starxi.io/join/CODE (or ?join=CODE) stashes a code on the
+  // window; once signed in, auto-join it and jump to that league's table.
+  useEffect(() => {
+    if (!auth.signedIn || joinHandledRef.current) return;
+    const pending = window.__STARXI_JOIN;
+    if (!pending) return;
+    joinHandledRef.current = true;
+    window.__STARXI_JOIN = null;
+    (async () => {
+      const r = await window.wcxiJoinLeague(pending);
+      await refreshLeagues();
+      if (r && r.ok) setScope({ kind: "league", code: r.code });
+    })();
+  }, [auth.signedIn, refreshLeagues]);
+
+  // The global table is public; only league scopes need a signed-in caller.
   const loadTable = useCallback(async () => {
-    if (!auth.signedIn) return;
     if (scope.kind === "manage") return;
+    if (scope.kind === "league" && !auth.signedIn) return;
     const myReq = ++reqIdRef.current;
     setLoading(true);
     const opts = scope.kind === "league"
-      ? { code: scope.code, limit: 100, mode: lbMode }
-      : { limit: 100, mode: lbMode };
+      ? { code: scope.code, limit: 100, mode: lbMode, stage: lbStage }
+      : { limit: 100, mode: lbMode, stage: lbStage };
     const r = await window.wcxiLeaderboard(opts);
     if (myReq !== reqIdRef.current) return; // a newer request superseded this one
     setData(r);
     setLoading(false);
-  }, [auth.signedIn, scope, lbMode]);
+  }, [auth.signedIn, scope, lbMode, lbStage]);
 
   useEffect(() => { loadTable(); }, [loadTable]);
+
+  // Signing out while inside a league/manage scope falls back to the public global table.
+  useEffect(() => {
+    if (!auth.signedIn && scope.kind !== "global") setScope({ kind: "global", code: null });
+  }, [auth.signedIn, scope.kind]);
 
   if (!auth.loaded) {
     return (
@@ -340,43 +573,21 @@ function Leaderboard({ onEditPicks, onBack }) {
     );
   }
 
-  if (!auth.signedIn) {
-    return (
-      <div className="step-screen">
-        <div className="step-scroll stagger">
-          <div className="lb-screen">
-            <div className="lb-head">
-              <h2 className="lb-title">See where you stand</h2>
-            </div>
-            <div className="lb-soft">
-              <div className="lb-soft-emoji">🔐</div>
-              <h3>Sign in to see the table</h3>
-              <p>
-                The global leaderboard and your private mini-leagues live with your
-                account, so they follow you across devices. Sign in to view your rank.
-              </p>
-              <button className="btn gold" onClick={() => window.clerkOpenSignIn()}>Sign in</button>
-            </div>
-          </div>
-        </div>
-        <div className="step-foot">
-          <button className="pill ghost sm" onClick={onBack}>← Back to my entry</button>
-        </div>
-      </div>
-    );
-  }
-
   const goManage = () => setScope({ kind: "manage", code: null });
   const afterLeagueChange = async (code, switchTo) => {
     await refreshLeagues();
     if (switchTo && code) setScope({ kind: "league", code });
   };
-  const afterRtfToggle = async (code, enabled) => {
-    // Refresh leagues list so the toggle state updates, and reload the table
-    // in case the mode was forced by the old RTF setting.
+  const afterManageChange = async () => {
     await refreshLeagues();
-    setData(null); // force reload
+    setData(null); // force the table to recompute (rename / RTF / membership)
   };
+  const afterLeft = async (code) => {
+    await refreshLeagues();
+    setScope({ kind: "global", code: null });
+  };
+
+  const activeLeague = scope.kind === "league" ? leagues.find((l) => l.code === scope.code) : null;
 
   return (
     <div className="step-screen">
@@ -394,11 +605,11 @@ function Leaderboard({ onEditPicks, onBack }) {
               <button
                 className={"lb-code-chip" + (codeCopied ? " copied" : "")}
                 onClick={() => copyCode(scope.code)}
-                title="Copy invite code"
+                title="Copy invite link"
               >
-                <span className="lb-code-chip-label">Invite code</span>
+                <span className="lb-code-chip-label">{codeCopied ? "Link copied" : "Invite link"}</span>
                 <span className="lb-code-chip-val">{scope.code}</span>
-                <span className="lb-code-chip-icon">{codeCopied ? "✓" : "📋"}</span>
+                <span className="lb-code-chip-icon">{codeCopied ? "✓" : "🔗"}</span>
               </button>
             )}
           </div>
@@ -408,29 +619,48 @@ function Leaderboard({ onEditPicks, onBack }) {
               className={"lb-scope" + (scope.kind === "global" ? " sel" : "")}
               onClick={() => setScope({ kind: "global", code: null })}
             >🌍 Global</button>
-            {leagues.map((l) => (
-              <button
-                key={l.code}
-                className={"lb-scope" + (scope.kind === "league" && scope.code === l.code ? " sel" : "")}
-                onClick={() => setScope({ kind: "league", code: l.code })}
-                title={`${l.memberCount} members`}
-              >
-                {l.name}<small>{l.memberCount}</small>
+            {auth.signedIn ? (
+              <>
+                {leagues.map((l) => (
+                  <button
+                    key={l.code}
+                    className={"lb-scope" + (scope.kind === "league" && scope.code === l.code ? " sel" : "")}
+                    onClick={() => setScope({ kind: "league", code: l.code })}
+                    title={`${l.memberCount} members`}
+                  >
+                    {l.name}<small>{l.memberCount}</small>
+                  </button>
+                ))}
+                <button
+                  className={"lb-scope add" + (scope.kind === "manage" ? " sel" : "")}
+                  onClick={goManage}
+                >＋ League</button>
+              </>
+            ) : (
+              <button className="lb-scope add" onClick={() => window.clerkOpenSignIn()}>
+                🔐 Your leagues
               </button>
-            ))}
-            <button
-              className={"lb-scope add" + (scope.kind === "manage" ? " sel" : "")}
-              onClick={goManage}
-            >＋ League</button>
+            )}
           </div>
+
+          {/* Signed-out: the global table is public; nudge them to claim a rank. */}
+          {!auth.signedIn && (
+            <div className="lb-signin-cta">
+              {window.__STARXI_JOIN ? (
+                <>👋 You've been invited to a league — <button className="lb-link" onClick={() => window.clerkOpenSignIn()}>sign in</button> to join and play.</>
+              ) : (
+                <>👀 This is the public global table. <button className="lb-link" onClick={() => window.clerkOpenSignIn()}>Sign in</button> to find your own rank and start private leagues with friends.</>
+              )}
+            </div>
+          )}
 
           {scope.kind === "manage" ? (
             <LbManage
               leagues={leagues}
+              onChanged={afterManageChange}
               onCreated={(code) => afterLeagueChange(code, true)}
               onJoined={(code) => afterLeagueChange(code, true)}
-              onLeft={(code) => afterLeagueChange(code, false)}
-              onRtfToggled={afterRtfToggle}
+              onLeft={afterLeft}
               onClose={() => setScope({ kind: "global", code: null })}
             />
           ) : (
@@ -440,11 +670,9 @@ function Leaderboard({ onEditPicks, onBack }) {
               onRefresh={loadTable}
               mode={lbMode}
               onModeChange={(m) => setLbMode(m)}
-              leagueRtfEnabled={
-                scope.kind === "league"
-                  ? (leagues.find(l => l.code === scope.code) || {}).roadToFinalEnabled
-                  : true
-              }
+              stage={lbStage}
+              onStageChange={(s) => setLbStage(s)}
+              leagueRtfEnabled={activeLeague ? activeLeague.roadToFinalEnabled : true}
             />
           )}
         </div>

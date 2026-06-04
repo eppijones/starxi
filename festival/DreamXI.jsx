@@ -232,7 +232,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
             <div className="pts-sheet-body">
 
               <div className="pts-block">
-                <div className="pts-block-label">⚽ Star XI — per match</div>
+                <div className="pts-block-label">⚽ Star XI — every match, all tournament</div>
                 <div className="pts-table">
                   <div className="pts-row pos"><span>Goal scored</span><span>+5</span></div>
                   <div className="pts-row pos"><span>Assist</span><span>+3</span></div>
@@ -244,17 +244,44 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
                   <div className="pts-row neg"><span>Red card</span><span>−3</span></div>
                   <div className="pts-row cap"><span>Captain armband</span><span>×2</span></div>
                 </div>
+                <p className="pts-note">Your XI keeps scoring through the knockouts — same values in the Round of 32, R16, QF, SF and Final. Picks from eliminated nations fall silent, so use your 3 swaps. Your <strong>GW3 captain</strong> wears the ×2 armband all the way through the knockouts.</p>
               </div>
 
               <div className="pts-block">
-                <div className="pts-block-label">💎 Gem Boost</div>
+                <div className="pts-block-label">💎 Gem Boost — on goals &amp; assists</div>
                 <div className="pts-table">
                   <div className="pts-row"><span>⭐ 8.0+ rating</span><span style={{color:"rgba(255,255,255,.5)"}}>×1</span></div>
-                  <div className="pts-row pos"><span>🔵 7.0–7.9 (Solid Pick)</span><span>×1.3</span></div>
-                  <div className="pts-row pos"><span>💎 6.0–6.9 (Hidden Gem)</span><span>×1.5</span></div>
-                  <div className="pts-row pos"><span>🃏 &lt;6.0 (Wild Card)</span><span>×2.0</span></div>
+                  <div className="pts-row pos"><span>🔵 7.0–7.9 (Solid Pick)</span><span>×1.2</span></div>
+                  <div className="pts-row pos"><span>💎 6.0–6.9 (Hidden Gem)</span><span>×1.4</span></div>
+                  <div className="pts-row pos"><span>🃏 &lt;6.0 (Wild Card)</span><span>×1.6</span></div>
                 </div>
-                <p className="pts-note">Cards are never boosted. Captain + gem = massive edge.</p>
+                <p className="pts-note">The boost lifts <strong>attacking returns only</strong> (goals + assists), so a breakout cheap forward can out-score a superstar. Clean sheets, wins and cards are flat.</p>
+              </div>
+
+              <div className="pts-block">
+                <div className="pts-block-label">🏴 Your nation's deep run</div>
+                <div className="pts-table">
+                  <div className="pts-row pos"><span>Reaches Round of 16</span><span>+3</span></div>
+                  <div className="pts-row pos"><span>Reaches Quarter-final</span><span>+6</span></div>
+                  <div className="pts-row pos"><span>Reaches Semi-final</span><span>+10</span></div>
+                  <div className="pts-row pos"><span>Reaches the Final</span><span>+15</span></div>
+                  <div className="pts-row pos"><span>Champion 🏆</span><span>+25</span></div>
+                </div>
+                <p className="pts-note">A one-off bonus for how far your chosen home nation actually goes — you earn the highest milestone it reaches.</p>
+              </div>
+
+              <div className="pts-block">
+                <div className="pts-block-label">🗺️ Road to the Final — bonus</div>
+                <div className="pts-table">
+                  <div className="pts-row pos"><span>Group position (each)</span><span>+1</span></div>
+                  <div className="pts-row pos"><span>R32 advancer</span><span>+1</span></div>
+                  <div className="pts-row pos"><span>R16 advancer</span><span>+2</span></div>
+                  <div className="pts-row pos"><span>QF advancer</span><span>+4</span></div>
+                  <div className="pts-row pos"><span>SF advancer</span><span>+8</span></div>
+                  <div className="pts-row pos"><span>Champion call</span><span>+16</span></div>
+                  <div className="pts-row cap"><span>Home-nation picks</span><span>×2</span></div>
+                </div>
+                <p className="pts-note">Predictions are optional bonus on top of your XI. The leaderboard can rank the full tournament, the group stage, or the knockouts alone.</p>
               </div>
 
             </div>

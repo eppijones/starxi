@@ -25,7 +25,7 @@
 const { kvConfigured, kvGet, kvSmembers, kvMget } = require("./_lib/kv");
 const { verifyRequest } = require("./_lib/auth");
 const { loadGameData } = require("./_lib/gamedata");
-const { buildResultsMap } = require("../festival/results-map");
+const { assembleLiveSim } = require("../festival/results-map");
 const { tallyUser } = require("../festival/scoring-core");
 
 const ENTRY = (uid) => `wcxi:entry:${uid}`;
@@ -59,9 +59,9 @@ function normalizeCode(c) {
     .slice(0, 8);
 }
 
-// Pull the live-results payload from our own /api/results (reuses its edge cache
-// + rate-limit budget). Always resolves; null -> we score against zero results.
-async function fetchResultsPayload(req) {
+// Pull a payload from one of our own /api routes (reuses its edge cache +
+// rate-limit budget). Always resolves; null -> caller scores against nothing.
+async function fetchApi(req, path) {
   try {
     const host = req.headers && req.headers.host;
     if (!host) return null;
@@ -70,7 +70,7 @@ async function fetchResultsPayload(req) {
     ).split(",")[0];
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 6000);
-    const r = await fetch(`${proto}://${host}/api/results`, {
+    const r = await fetch(`${proto}://${host}${path}`, {
       signal: ctrl.signal,
       headers: { accept: "application/json" },
     });
@@ -82,41 +82,54 @@ async function fetchResultsPayload(req) {
   }
 }
 
-// Rank ladder — two modes:
+// Rank ladder — two orthogonal dimensions the client selects via ?mode= & ?stage=:
 //
-// combined: primary global board — XI + Road points together. Rewards players
-//   who engage with both modes.
-//   1) total (xiPts + predictionPts)  2) bullseyes  3) earliest submission
+//   mode:  "combined" (Star XI + Road) | "xionly" (Star XI only)
+//   stage: "all" (whole tournament) | "group" | "knockout"
 //
-// xionly: Star XI leaderboard — pure squad quality, no prediction bonus.
-//   1) xiPts  2) bullseyes  3) earliest submission
+// The points BASIS a row is ranked (and shown) on is the (mode × stage) cell:
+//                 group              knockout                 all
+//   combined   groupPts           knockoutPts            xiPts+predictionPts
+//   xionly     xiGroupPts         xiKnockoutPts          xiPts
 //
-// The old "xi first, predictions break ties" behaviour is gone from the API —
-// the client now picks which board it wants via ?mode=.
-function rankLadderCombined(a, b) {
-  const ta = a.xiPts + a.predictionPts;
-  const tb = b.xiPts + b.predictionPts;
-  if (tb !== ta) return tb - ta;
-  if (b.bullseyes !== a.bullseyes) return b.bullseyes - a.bullseyes;
-  return (a.submittedAt || 0) - (b.submittedAt || 0);
+// Ties always break on: 2) bullseyes  3) earliest submission. Submission order is
+// surfaced to the client (tiebreak flag) so a level table never reads as arbitrary.
+function rowBasis(r, mode, stage) {
+  if (mode === "xionly") {
+    if (stage === "group") return r.xiGroupPts;
+    if (stage === "knockout") return r.xiKnockoutPts;
+    return r.xiPts;
+  }
+  if (stage === "group") return r.groupPts;
+  if (stage === "knockout") return r.knockoutPts;
+  return r.xiPts + r.predictionPts;
 }
-function rankLadderXiOnly(a, b) {
-  if (b.xiPts !== a.xiPts) return b.xiPts - a.xiPts;
-  if (b.bullseyes !== a.bullseyes) return b.bullseyes - a.bullseyes;
-  return (a.submittedAt || 0) - (b.submittedAt || 0);
+function makeLadder(mode, stage) {
+  return function (a, b) {
+    const ba = rowBasis(a, mode, stage);
+    const bb = rowBasis(b, mode, stage);
+    if (bb !== ba) return bb - ba;
+    if (b.bullseyes !== a.bullseyes) return b.bullseyes - a.bullseyes;
+    return (a.submittedAt || 0) - (b.submittedAt || 0);
+  };
 }
-// Keep old export name for unit tests (maps to combined).
-function rankLadder(a, b) { return rankLadderCombined(a, b); }
+// Keep old export name for unit tests (maps to combined / all).
+function rankLadder(a, b) { return makeLadder("combined", "all")(a, b); }
 
-function publicRow(r, uid, mode) {
+function publicRow(r, uid, mode, stage) {
   const total = r.xiPts + r.predictionPts;
   return {
     rank: r.rank,
     name: r.name,
-    pts: mode === "xionly" ? r.xiPts : total,
+    pts: rowBasis(r, mode, stage),
     total,
     predictionPts: r.predictionPts,
     xiPts: r.xiPts,
+    xiGroupPts: r.xiGroupPts,
+    xiKnockoutPts: r.xiKnockoutPts,
+    groupPts: r.groupPts,
+    knockoutPts: r.knockoutPts,
+    nationBonus: r.nationBonus,
     bullseyes: r.bullseyes,
     isYou: r.userId === uid,
   };
@@ -133,11 +146,15 @@ async function computeRows(memberUids, req) {
     if (e) entries.push(e);
   });
 
-  const { FIXTURES, PLAYERS } = loadGameData();
-  const payload = await fetchResultsPayload(req);
-  const mapped = buildResultsMap(payload, FIXTURES);
-  const sim = { results: mapped.results, playerEvents: {} };
-  const data = { FIXTURES, PLAYERS };
+  const data = loadGameData(); // { GROUPS, NATIONS, PLAYERS, FIXTURES }
+  // Two live feeds, fetched in parallel: scorelines (football-data) drive the
+  // bracket + clean sheets; player stats (balldontlie) drive goals/assists. Both
+  // degrade to null → the assembler scores against whatever is available.
+  const [resultsPayload, statsPayload] = await Promise.all([
+    fetchApi(req, "/api/results"),
+    fetchApi(req, "/api/player-stats"),
+  ]);
+  const sim = assembleLiveSim(resultsPayload, statsPayload, data);
 
   const rows = entries.map((e) => {
     const t = tallyUser(e, sim, data);
@@ -146,25 +163,30 @@ async function computeRows(memberUids, req) {
       name: (e.displayName && String(e.displayName)) || "Player",
       predictionPts: t.predictionPts,
       xiPts: t.xiPts,
+      xiGroupPts: t.xiGroupPts,
+      xiKnockoutPts: t.xiKnockoutPts,
+      groupPts: t.groupPts,
+      knockoutPts: t.knockoutPts,
+      nationBonus: t.nationBonus,
       bullseyes: t.bullseyes,
       submittedAt: e.submittedAt || e.updatedAt || 0,
     };
   });
-  // Rows are intentionally NOT sorted here — the caller applies mode-specific sorting.
+  // Rows are intentionally NOT sorted here — the caller applies mode/stage sorting.
 
   return {
     rows,
     meta: {
-      played: mapped.played,
-      live: mapped.live,
-      updatedAt: mapped.updatedAt,
-      resultsConfigured: mapped.configured,
+      played: sim.meta.played,
+      live: sim.meta.live,
+      updatedAt: sim.meta.updatedAt,
+      resultsConfigured: sim.meta.configured,
     },
   };
 }
 
-function sortedRows(rows, mode) {
-  const sorted = rows.slice().sort(mode === "xionly" ? rankLadderXiOnly : rankLadderCombined);
+function sortedRows(rows, mode, stage) {
+  const sorted = rows.slice().sort(makeLadder(mode, stage));
   sorted.forEach((r, i) => { r.rank = i + 1; });
   return sorted;
 }
@@ -173,9 +195,12 @@ module.exports = async (req, res) => {
   if (!kvConfigured()) {
     return json(res, 200, { ok: false, configured: false });
   }
+  // The GLOBAL table is public — no sign-in needed (it's the shop window). Auth
+  // is optional here: a signed-in caller also gets their own `you` row + isYou
+  // flags; an anonymous caller just sees the ranked names. League scopes below
+  // still require auth (they're private and members-only).
   const auth = await verifyRequest(req);
-  if (!auth) return json(res, 401, { error: "unauthorized" });
-  const uid = auth.userId;
+  const uid = auth ? auth.userId : null;
 
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -190,10 +215,17 @@ module.exports = async (req, res) => {
   // `mode` selects the ranking spine. Combined (default) ranks by total points;
   // xionly ranks by Star XI points alone (ignores prediction bonus).
   let mode = url.searchParams.get("mode") === "xionly" ? "xionly" : "combined";
+  // `stage` scopes the points window: the whole tournament (default), the group
+  // stage only, or the knockouts only. The knockout board lets players who join
+  // mid-tournament still compete on equal footing from the R32 onward.
+  const stageParam = url.searchParams.get("stage");
+  let stage = stageParam === "group" || stageParam === "knockout" ? stageParam : "all";
 
   // Resolve scope + roster.
   let scope, scopeName, leagueCode, memberUids, leagueRtfEnabled;
   if (code) {
+    // Private league → must be signed in AND a member.
+    if (!uid) return json(res, 401, { ok: false, error: "auth_required" });
     const meta = safeParse(await kvGet(LEAGUE_META(code)));
     if (!meta) return json(res, 404, { ok: false, error: "no_such_league" });
     memberUids = (await kvSmembers(LEAGUE_MEMBERS(code))) || [];
@@ -226,10 +258,10 @@ module.exports = async (req, res) => {
   }
 
   const { rows, meta } = cached;
-  const ranked = sortedRows(rows, mode);
-  const top = ranked.slice(0, limit).map((r) => publicRow(r, uid, mode));
+  const ranked = sortedRows(rows, mode, stage);
+  const top = ranked.slice(0, limit).map((r) => publicRow(r, uid, mode, stage));
   const mine = ranked.find((r) => r.userId === uid);
-  const you = mine ? publicRow(mine, uid, mode) : null;
+  const you = mine ? publicRow(mine, uid, mode, stage) : null;
 
   return json(res, 200, {
     ok: true,
@@ -238,6 +270,7 @@ module.exports = async (req, res) => {
     code: leagueCode,
     name: scopeName,
     mode,
+    stage,
     leagueRtfEnabled,
     total: ranked.length,
     played: meta.played,

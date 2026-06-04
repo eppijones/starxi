@@ -15,7 +15,14 @@
 // Kickoff lock: before KICKOFF the whole entry is editable. At/after KICKOFF the
 // prediction CORE (nation, bracket, picks, formation) freezes; only the
 // in-tournament tactical fields (captain, captainPlus, captainByMd, swaps) may
-// still change. A brand-new entry can't be created once the tournament kicks off.
+// still change.
+//
+// Late entries: a player CAN still join after kickoff (the World Cup is when
+// interest peaks). A brand-new entry created post-kickoff is flagged
+// { lateEntry:true, joinedAt } and its core is frozen the moment it's saved
+// (you get one shot to set your XI + bracket, same as everyone else). Late
+// joiners compete on the KNOCKOUT-STAGE leaderboard, which scores only from the
+// Round of 32 onward — so joining during the group stage costs you nothing there.
 
 const { kvConfigured, kvGet, kvSet, kvSadd } = require("./_lib/kv");
 const { verifyRequest } = require("./_lib/auth");
@@ -146,13 +153,10 @@ module.exports = async (req, res) => {
     const existingRaw = await kvGet(KEY(uid));
     const existing = existingRaw ? safeParse(existingRaw) : null;
     const locked = now >= KICKOFF_MS;
-
-    if (locked && !existing) {
-      return json(res, 403, {
-        error: "locked",
-        message: "Entries closed at kickoff.",
-      });
-    }
+    // A brand-new entry saved after kickoff is a late joiner. Their core freezes
+    // immediately (applyLock freezes it on every save once `existing` is set), so
+    // they get one shot to pick — then it's locked like everyone else's.
+    const isLate = locked && !existing;
 
     const merged = applyLock(existing, incoming, now);
 
@@ -166,13 +170,15 @@ module.exports = async (req, res) => {
       userId: uid,
       displayName,
       ...merged,
+      lateEntry: (existing && existing.lateEntry) || isLate || false,
+      joinedAt: (existing && existing.joinedAt) || now,
       submittedAt: (existing && existing.submittedAt) || now,
       updatedAt: now,
     };
 
     await kvSet(KEY(uid), JSON.stringify(record));
     await kvSadd(ROSTER, uid);
-    return json(res, 200, { ok: true, locked, entry: record });
+    return json(res, 200, { ok: true, locked, lateEntry: record.lateEntry, entry: record });
   }
 
   res.setHeader("Allow", "GET, POST");

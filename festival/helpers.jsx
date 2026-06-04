@@ -115,8 +115,27 @@ function simulateTournament(seed = 26) {
     }
   });
 
-  // Per-player, per-matchday event line.
-  // Players tied to nations only score on matchdays their nation played.
+  // 3. Which nations took part in each knockout round (so a pick only scores in
+  //    rounds its nation actually reached — eliminated picks fall silent, which
+  //    is exactly what the 3 swaps are for). byMd index → round:
+  //      0,1,2 group MD1–3 | 3 R32 | 4 R16 | 5 QF | 6 SF | 7 Final
+  const inSet = (codes) => new Set(codes.filter(Boolean));
+  const r32Teams = [];
+  for (let i = 0; i < window.KO_ROUND_SIZES.r32; i++) {
+    const m = window.resolveKoMatch(bracket, "r32", i);
+    if (m.home) r32Teams.push(m.home.code);
+    if (m.away) r32Teams.push(m.away.code);
+  }
+  // advances[round] holds that round's WINNERS, i.e. who advanced to the NEXT round.
+  const playedRound = {
+    3: inSet(r32Teams),                                   // R32 participants
+    4: inSet(Object.values(bracket.advances.r32)),        // reached R16
+    5: inSet(Object.values(bracket.advances.r16)),        // reached QF
+    6: inSet(Object.values(bracket.advances.qf)),         // reached SF
+    7: inSet(Object.values(bracket.advances.sf)),         // reached Final
+  };
+
+  // Per-player, per-matchday event line (8 matchdays: 3 group + 5 knockout).
   const playerEvents = {};
   window.PLAYERS.forEach(p => {
     const base = (p.form - 7) / 2;
@@ -129,12 +148,19 @@ function simulateTournament(seed = 26) {
       while (pp > L && k < 6) { k++; pp *= rng(); }
       return Math.max(0, k - 1);
     };
-
-    const byMd = [1, 2, 3].map(() => ({
+    const playLine = () => ({
       goals:   sample(goalRate),
       assists: sample(assistRate),
       sheets:  sample(sheetRate),
-    }));
+    });
+    const blank = { goals: 0, assists: 0, sheets: 0 };
+
+    const byMd = [0, 1, 2, 3, 4, 5, 6, 7].map((idx) => {
+      if (idx <= 2) return playLine();                       // group MD1–3: always
+      return playedRound[idx] && playedRound[idx].has(p.nat) // KO: only if nation reached it
+        ? playLine()
+        : { ...blank };
+    });
     const total = byMd.reduce((acc, m) => ({
       goals: acc.goals + m.goals,
       assists: acc.assists + m.assists,

@@ -1,4 +1,7 @@
 {
   "buildCommand": null,
-  "outputDirectory": "."
+  "outputDirectory": ".",
+  "rewrites": [
+    { "source": "/join/:code", "destination": "/index.html" }
+  ]
 }
