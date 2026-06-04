@@ -261,6 +261,30 @@ const lt = tallyUser(fraState, liveSim, GAME);
 eq("assembled sim: Mbappé group pts (form 9.1, 2g+1a = 13)", lt.xiGroupPts, 13);
 eq("assembled sim: FRA nation bonus flows through", lt.nationBonus, 25);
 
+// ——— Late-entry per-round lock (anti-backfill) ———
+section("late entry — per-round prediction lock");
+const { gateLateBracket } = require("../api/entry");
+const fullBracket = {
+  groups: { A: ["MEX", "KOR", "CZE", "RSA"] },
+  lucky3rds: ["X", "Y", "Z", "W", "P", "Q", "R", "S"],
+  advances: { r32: { 0: "ARG" }, r16: { 0: "BRA" }, qf: { 0: "FRA" }, sf: { 0: "ESP" }, final: { 0: "GER" } },
+};
+// Join during the R16 window (after R16 kicked off, before QF): groups, lucky,
+// R32 and R16 are cleared (already started); QF/SF/Final survive (still ahead).
+const midKo = gateLateBracket(fullBracket, Date.parse("2026-07-05T12:00:00Z"));
+eq("late: groups cleared once tournament started", midKo.groups, {});
+eq("late: lucky 3rds cleared", midKo.lucky3rds, []);
+eq("late: R32 cleared (already played)", midKo.advances.r32, {});
+eq("late: R16 cleared (already started)", midKo.advances.r16, {});
+eq("late: QF preserved (still ahead)", midKo.advances.qf, { 0: "FRA" });
+eq("late: SF preserved", midKo.advances.sf, { 0: "ESP" });
+eq("late: Final preserved", midKo.advances.final, { 0: "GER" });
+// Joining before any QF: a late joiner during the group stage keeps every KO
+// prediction (nothing's kicked off) but loses group/lucky calls.
+const earlyLate = gateLateBracket(fullBracket, Date.parse("2026-06-20T12:00:00Z"));
+eq("group-stage joiner keeps all KO picks", Object.keys(earlyLate.advances.r32).length, 1);
+eq("group-stage joiner loses group calls", earlyLate.groups, {});
+
 // ——— Summary ———
 console.log(`\n${"─".repeat(48)}`);
 console.log(`  ${pass} passed, ${fail} failed`);

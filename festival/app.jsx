@@ -173,7 +173,7 @@ function XIShareCard({ state, nation, captain, matchday, opponent, formation, on
         </div>
         {onShare && (
           <button className="xs-share-btn" onClick={onShare} disabled={shareLoading}>
-            {shareLoading ? "Saving…" : "↗ Download XI"}
+            {shareLoading ? "Saving…" : "↗ Share XI"}
           </button>
         )}
       </footer>
@@ -517,6 +517,7 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
   );
 
   const [shareLoading, setShareLoading] = useState(false);
+  const [shareMsg, setShareMsg] = useState(null); // {type:'ok'|'err', text}
   const [roadOpen, setRoadOpen] = useState(false);
   const cardRef = React.useRef(null);
 
@@ -526,42 +527,100 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
   const kdHrs  = Math.floor((msToKickoff % 86400000) / 3600000);
   const kdMins = Math.floor((msToKickoff % 3600000) / 60000);
 
+  // Export the Starting XI card as a high-quality PNG and hand it off the best
+  // way each platform allows: the native share sheet on phones/tablets (save to
+  // Photos, or post straight to Instagram / Messages / WhatsApp / Facebook), or
+  // a file download on desktop / Mac. Hardened against the things that silently
+  // broke this before — see the inline notes.
   const doShare = async () => {
     const el = cardRef.current;
-    if (!el || !window.html2canvas) return;
+    if (!el) return;
+    if (!window.html2canvas) {
+      setShareMsg({ type: "err", text: "Still loading — try again in a second." });
+      return;
+    }
+    setShareMsg(null);
     setShareLoading(true);
     try {
-      // Capture at 4× pixel density for crisp output at any zoom level
-      const raw = await window.html2canvas(el, {
-        scale: 4,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: null,
+      // The Anton display font must be ready, or the title rasterises in a
+      // fallback face. Resolves instantly once fonts have loaded.
+      if (document.fonts && document.fonts.ready) {
+        try { await document.fonts.ready; } catch (_) {}
+      }
+
+      // Pixel density that's crisp but BOUNDED. Two reasons this matters:
+      //  • mobile Safari blanks any canvas over ~16.7 MP — scale:4 on a wide
+      //    tablet/desktop card sailed past that and produced nothing;
+      //  • a smaller canvas captures faster, which keeps the tap's transient
+      //    user-activation alive when we call navigator.share() (iOS throws
+      //    "NotAllowedError" if the gesture has expired) — the main reason the
+      //    button did nothing on phones.
+      const rect = el.getBoundingClientRect();
+      const cssW = Math.max(1, Math.round(rect.width));
+      const cssH = Math.max(1, Math.round(rect.height));
+      const areaCap = Math.sqrt(12000000 / (cssW * cssH)); // ≤ ~12 MP, safe everywhere
+      let scale = Math.max(2.5, 1080 / cssW);              // ≥ 1080px wide → Instagram-ready
+      scale = Math.min(scale, areaCap, 3.5);
+      if (!isFinite(scale) || scale < 1) scale = 1;
+
+      const canvas = await window.html2canvas(el, {
+        scale,
+        useCORS: true,            // figure + mark are same-origin; no taint
+        backgroundColor: null,    // card paints its own nation-coloured field
         logging: false,
-        ignoreElements: (node) => node.classList && node.classList.contains("xs-share-btn"),
+        imageTimeout: 15000,
+        ignoreElements: (node) =>
+          node.classList && node.classList.contains("xs-share-btn"),
       });
 
-      const teamSlug = (state.teamName && state.teamName.trim().replace(/\s+/g, "-").toLowerCase()) || "star-xi";
+      const teamSlug =
+        (state.teamName && state.teamName.trim().replace(/\s+/g, "-").toLowerCase()) ||
+        "star-xi";
       const fileName = teamSlug + "-starting-xi.png";
 
-      // Convert canvas to blob for both share and download paths
-      const blob = await new Promise((res) => raw.toBlob(res, "image/png"));
+      // toBlob can hand back null if the canvas blew a limit — treat as an error
+      // instead of silently building a broken File.
+      const blob = await new Promise((resolve, reject) =>
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("empty-canvas"))),
+          "image/png"
+        )
+      );
       const file = new File([blob], fileName, { type: "image/png" });
 
-      // iOS Safari: use Web Share API with files so user can save to Photos
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "My Star XI" });
-      } else {
-        // Desktop / Android: standard blob download
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 100);
+      // 1) Native share sheet — phones & tablets.
+      if (
+        navigator.share &&
+        navigator.canShare &&
+        navigator.canShare({ files: [file] })
+      ) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: "My Star XI",
+            text: "My Star XI · starxi.io",
+          });
+          return; // shared — finally{} clears the spinner
+        } catch (err) {
+          if (err && err.name === "AbortError") return; // user closed the sheet — fine
+          // lost activation / unsupported target → fall through to download
+        }
       }
+
+      // 2) Download the PNG — desktop, Mac, Android Chrome.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setShareMsg({ type: "ok", text: "Saved! Check your downloads." });
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e) {
       console.warn("Share image failed:", e);
+      setShareMsg({ type: "err", text: "Couldn't make the image — please try again." });
     } finally {
       setShareLoading(false);
     }
@@ -645,6 +704,18 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
           title="World Cup history & records"
         >📖 History</button>
       </div>
+
+      {/* Share/download status — lives outside the .xishare card so it's never
+          captured into the exported image; fixed-positioned, auto-dismisses. */}
+      {shareMsg && (
+        <div
+          className={"xi-toast " + (shareMsg.type === "err" ? "is-err" : "is-ok")}
+          role="status"
+          onAnimationEnd={() => setShareMsg(null)}
+        >
+          {shareMsg.text}
+        </div>
+      )}
 
       {/* Road to the Final — full-screen modal, portalled to body to escape the
           `transform` on .step-screen which would otherwise confine position:fixed */}

@@ -32,6 +32,39 @@ const KICKOFF_MS = Date.parse("2026-06-11T16:00:00Z");
 const KEY = (uid) => `wcxi:entry:${uid}`;
 const ROSTER = "wcxi:players";
 
+// Per-round prediction lock times (UTC, from the 2026 schedule). A LATE entry
+// (created after kickoff) cannot back-fill a prediction for a round that has
+// already started — those predictions are cleared on save, so a mid-tournament
+// joiner can't "call" results that already happened. They CAN still predict
+// rounds that haven't kicked off yet. Group standings + Lucky-8 lock at kickoff.
+const ROUND_LOCK_MS = {
+  r32: Date.parse("2026-06-28T00:00:00Z"),
+  r16: Date.parse("2026-07-04T00:00:00Z"),
+  qf: Date.parse("2026-07-09T00:00:00Z"),
+  sf: Date.parse("2026-07-14T00:00:00Z"),
+  final: Date.parse("2026-07-18T00:00:00Z"),
+};
+
+// Clear the parts of a late joiner's bracket whose round has already started, so
+// they only score predictions for rounds still ahead of them. Pure: returns a
+// new bracket; never mutates the input.
+function gateLateBracket(bracket, now) {
+  const b = bracket && typeof bracket === "object" ? bracket : {};
+  const adv = (b.advances && typeof b.advances === "object") ? b.advances : {};
+  const out = {
+    // Group standings + the Lucky 8 settle during the group stage → cleared once
+    // the tournament is under way (a late joiner can't call group tables).
+    groups: now >= KICKOFF_MS ? {} : (b.groups || {}),
+    lucky3rds: now >= KICKOFF_MS ? [] : (Array.isArray(b.lucky3rds) ? b.lucky3rds : []),
+    advances: { r32: {}, r16: {}, qf: {}, sf: {}, final: {} },
+  };
+  ["r32", "r16", "qf", "sf", "final"].forEach((round) => {
+    const started = now >= ROUND_LOCK_MS[round];
+    out.advances[round] = started ? {} : (adv[round] && typeof adv[round] === "object" ? adv[round] : {});
+  });
+  return out;
+}
+
 function json(res, code, body) {
   res.statusCode = code;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -157,6 +190,8 @@ module.exports = async (req, res) => {
     // immediately (applyLock freezes it on every save once `existing` is set), so
     // they get one shot to pick — then it's locked like everyone else's.
     const isLate = locked && !existing;
+    // Anti-backfill: a late joiner can't predict rounds that already kicked off.
+    if (isLate) incoming.bracket = gateLateBracket(incoming.bracket, now);
 
     const merged = applyLock(existing, incoming, now);
 
@@ -188,4 +223,6 @@ module.exports = async (req, res) => {
 // Exposed for unit tests (harmless extra props on the handler export).
 module.exports.sanitize = sanitize;
 module.exports.applyLock = applyLock;
+module.exports.gateLateBracket = gateLateBracket;
 module.exports.KICKOFF_MS = KICKOFF_MS;
+module.exports.ROUND_LOCK_MS = ROUND_LOCK_MS;
