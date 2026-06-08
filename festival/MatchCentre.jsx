@@ -95,7 +95,7 @@ function MatchCentre({ onBack }) {
       <div className="step-scroll stagger">
         <div className="mc-screen">
           <div className="mc-head">
-            <h2 className="mc-title">Match Centre</h2>
+            <h2 className="mc-title">Fixtures</h2>
             <button className="lb-refresh" onClick={load} title="Refresh">↻</button>
           </div>
 

@@ -707,8 +707,8 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onMatchCentre, onHi
             {/* Match Centre — all World Cup fixtures + live scores */}
             <button className="road-opener mc-opener" onClick={onMatchCentre}>
               <span className="ro-chev">📅</span>
-              <span className="ro-title">Match Centre</span>
-              <span className="ro-meta">All fixtures · kickoff times · live scores</span>
+              <span className="ro-title">Fixtures</span>
+              <span className="ro-meta">All matches · kickoff times · live scores</span>
             </button>
             {/* Road to the Final — opens as a full-screen modal */}
             <button className="road-opener" onClick={() => setRoadOpen(true)}>
