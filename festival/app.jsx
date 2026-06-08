@@ -46,8 +46,6 @@ const KICKOFF = new Date("2026-06-11T16:00:00Z");
 //   nobody yet (anonymous)   -> "anon"
 function starxiIdentityKey(auth) {
   if (auth && auth.signedIn && auth.user && auth.user.id) return "u:" + auth.user.id;
-  const gt = (typeof window !== "undefined" && window.wcxiGuestToken && window.wcxiGuestToken()) || null;
-  if (gt) return "g:" + gt;
   return "anon";
 }
 // A brand-new, unshared state object (DEFAULT_STATE's nested bracket must not be reused).
@@ -495,9 +493,6 @@ function LeaguesPreview({ auth, onLeaderboard }) {
 // /api leaderboards. The expandable LockedBracket review sits below.
 function TournamentLive({ state, onEditPicks, onLeaderboard, onMatchCentre, onHistory }) {
   const auth = useClerkAuth();
-  // A guest is signed-out but holds a recovery-code session. They can re-view their
-  // code or upgrade to a full account (which unlocks creating leagues + email recovery).
-  const isGuest = !auth.signedIn && !!(window.wcxiGuestToken && window.wcxiGuestToken());
   const nation = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
   const bracket = state.bracket || { groups: {}, advances: { r32:{}, r16:{}, qf:{}, sf:{}, final:{} } };
   const picks = state.picks || [];
@@ -758,20 +753,6 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onMatchCentre, onHi
           onClick={onHistory}
           title="World Cup history & records"
         >📖 History</button>
-        {isGuest && (
-          <React.Fragment>
-            <button
-              className="pill ghost sm"
-              onClick={() => window.starxiShowGuestCode && window.starxiShowGuestCode()}
-              title="Show the code that gets you back to this team"
-            >🎟️ My code</button>
-            <button
-              className="pill ghost sm"
-              onClick={() => window.clerkOpenSignUp && window.clerkOpenSignUp()}
-              title="Add an email account — enables private leagues + recovery"
-            >＋ Add account</button>
-          </React.Fragment>
-        )}
       </div>
 
       {/* Share/download status — lives outside the .xishare card so it's never
@@ -1019,87 +1000,6 @@ function matchWatchEnabled() {
   }
 }
 
-// ——— Guest code: reveal (after lock-in) + restore (returning on a new device) ———
-// Shown once, right after a guest locks in: the recovery code to save. It's the
-// only key back to their team, so we make saving it feel important without blocking
-// the player from LIVE (the modal sits over the already-loaded LIVE screen).
-function GuestCodeReveal({ code, onClose }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    try {
-      navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch (e) {}
-  };
-  return (
-    <div className="guest-modal" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="guest-card" onClick={(e) => e.stopPropagation()}>
-        <div className="guest-card-emoji">🎟️</div>
-        <h3 className="guest-card-title">You're in — save your code</h3>
-        <p className="guest-card-lede">
-          This is the key to your team on any other device or browser. We can't recover
-          it for you, so keep it somewhere safe.
-        </p>
-        <button className="guest-code" onClick={copy} title="Tap to copy">
-          <span className="guest-code-text">{code}</span>
-          <span className="guest-code-copy">{copied ? "✓ copied" : "tap to copy"}</span>
-        </button>
-        <p className="guest-card-foot">
-          Want email recovery + private leagues? You can add an account anytime.
-        </p>
-        <button className="pill primary guest-card-done" onClick={onClose}>
-          Saved it — take me to Live →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// "I have a code" — restore a guest team after clearing storage or on a new device.
-function GuestRestore({ onClose, onRestored }) {
-  const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
-  const fmt = (v) => (window.wcxiFormatGuestCode ? window.wcxiFormatGuestCode(v) : v);
-  const go = async () => {
-    const clean = fmt(code).replace(/[^A-Z0-9]/gi, "");
-    if (clean.length < 12) { setErr("That code looks too short."); return; }
-    setBusy(true); setErr(null);
-    const res = window.wcxiGuestRedeem ? await window.wcxiGuestRedeem(code) : { ok: false };
-    setBusy(false);
-    if (!res.ok) {
-      setErr(res.error === "no_such_code" ? "No team found for that code." : "Couldn't restore — check the code and try again.");
-      return;
-    }
-    onRestored && onRestored();
-  };
-  return (
-    <div className="guest-modal" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="guest-card" onClick={(e) => e.stopPropagation()}>
-        <div className="guest-card-emoji">🔑</div>
-        <h3 className="guest-card-title">Restore your team</h3>
-        <p className="guest-card-lede">Enter the code you saved when you locked in.</p>
-        <input
-          className="lb-input guest-restore-input"
-          value={code}
-          onChange={(e) => { setCode(fmt(e.target.value)); if (err) setErr(null); }}
-          onKeyDown={(e) => { if (e.key === "Enter") go(); }}
-          placeholder="7K3P-9QX2-T8MZ"
-          maxLength={16}
-          autoFocus
-          aria-label="Recovery code"
-        />
-        {err && <p className="guest-restore-err">{err}</p>}
-        <div className="guest-card-actions">
-          <button className="pill ghost sm" onClick={onClose} disabled={busy}>Cancel</button>
-          <button className="pill primary" onClick={go} disabled={busy}>{busy ? "Restoring…" : "Restore →"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function App() {
   const initial = window.loadState();
   const watchOn = matchWatchEnabled();
@@ -1150,63 +1050,38 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // ——— Lock-in (guest-first: no sign-up wall) ———
-  // Players build their whole entry anonymously. At lock-in we DON'T force an
-  // account: a brand-new player is minted a guest identity + a recovery code and
-  // taken straight to LIVE. Signing up with email stays available (and is required
-  // to create a league); a guest who later signs in is auto-claimed (merged).
+  // ——— Lock-in (Clerk account required) ———
+  // Players build their whole entry anonymously (localStorage draft). Locking it
+  // in requires a real account — more bullet-proof than a recovery code, and we're
+  // happy to require sign-up. If they're not signed in we open Clerk sign-up and
+  // finish the save the moment they're authenticated; the anonymous draft carries
+  // onto the new account via the identity reconcile below.
   const auth = useClerkAuth();
   const pendingSubmit = useRef(false);
-  const [guestReveal, setGuestReveal] = useState(null);  // recovery code to show once
-  const [restoreOpen, setRestoreOpen] = useState(false); // "I have a code" modal
 
-  // Persist the entry server-side. authedFetch attaches whichever identity exists
-  // (Clerk JWT, else the guest token), so this works for both kinds of player.
   const persistEntry = (st) => {
     const displayName = (st.teamName && st.teamName.trim()) || auth.displayName || null;
     if (window.wcxiSaveEntry) Promise.resolve().then(() => window.wcxiSaveEntry(st, displayName));
   };
   // Mark submitted + jump to LIVE. localStorage is the source of truth, so LIVE
-  // renders instantly regardless of network. Returns the snapshot for persisting.
+  // renders instantly. Returns the snapshot for persisting.
   const lockInLocally = () => {
     const next = { ...state, submitted: true, submittedAt: state.submittedAt || Date.now() };
     setState(next);
     goTo("live");
     return next;
   };
-  // Used once a Clerk flow completes (deferred submit) — see the effect below.
   const doSubmit = () => { persistEntry(lockInLocally()); };
 
-  // Primary CTA: lock in & go live, no sign-up.
+  // The single lock-in path: signed in → save now; otherwise open Clerk sign-up
+  // and finish via the deferred-submit effect once authenticated.
   const submit = () => {
-    // Already identified (a Clerk account, or a returning guest who has a code):
-    // just lock in and persist under that identity.
-    if (auth.signedIn || (window.wcxiGuestToken && window.wcxiGuestToken())) {
-      persistEntry(lockInLocally());
-      return;
-    }
-    // Brand-new player: go LIVE now, mint a guest code in the background, then
-    // persist under the guest session and reveal the code for them to save.
-    const snap = lockInLocally();
-    if (window.wcxiGuestMint) {
-      window.wcxiGuestMint().then((res) => {
-        if (res && res.ok) {
-          persistEntry(snap);
-          if (res.code) setGuestReveal(res.code);
-        }
-      });
-    }
-  };
-  // Secondary CTA: make it a real account now (also the path to creating leagues).
-  const submitWithAccount = () => {
     if (auth.signedIn) { doSubmit(); return; }
     pendingSubmit.current = true;
-    window.clerkOpenSignUp ? window.clerkOpenSignUp() : window.clerkOpenSignIn();
+    (window.clerkOpenSignUp || window.clerkOpenSignIn || function () {})();
   };
-  // Finish a deferred lock-in once the player completes the Clerk flow (build a
-  // team anonymously → "Sign up & lock in" → persist under the new account).
-  // Landing on LIVE for an already-submitted entry is handled by the identity
-  // reconcile below, so it stays correct across account switches.
+
+  // Finish a deferred lock-in once the player completes the Clerk flow.
   useEffect(() => {
     if (!auth.signedIn) return;
     if (pendingSubmit.current) {
@@ -1214,41 +1089,6 @@ function App() {
       doSubmit();
     }
   }, [auth.signedIn]);
-
-  // ——— Auto-claim: a guest who signs up/in gets their data merged ———
-  // Moves the guest's entry, roster slot and league memberships onto the Clerk
-  // account, then clears the guest session. Runs once per sign-in.
-  const claimedRef = useRef(false);
-  useEffect(() => {
-    if (!auth.signedIn || claimedRef.current) return;
-    if (!(window.wcxiGuestToken && window.wcxiGuestToken())) return;
-    claimedRef.current = true;
-    if (window.wcxiGuestClaim) window.wcxiGuestClaim();
-  }, [auth.signedIn]);
-
-  // Let any "Sign in" surface offer "…or restore with a code".
-  useEffect(() => {
-    window.starxiOpenRestore = () => setRestoreOpen(true);
-    window.starxiShowGuestCode = () => {
-      const c = window.wcxiGuestCode && window.wcxiGuestCode();
-      if (c) setGuestReveal(c);
-    };
-    return () => {
-      try { delete window.starxiOpenRestore; delete window.starxiShowGuestCode; } catch (e) {}
-    };
-  }, []);
-
-  // After a code restores a team, pull the entry back and drop into LIVE.
-  const onRestored = () => {
-    setRestoreOpen(false);
-    if (!window.wcxiLoadEntry) return;
-    window.wcxiLoadEntry().then((res) => {
-      const e = res && res.entry;
-      if (!e) { goTo("live"); return; }
-      setState(entryToState(e)); // canonicalises retired pick ids via the alias map
-      goTo("live");
-    });
-  };
 
   // ——— Sign-out redirect ———
   // When the user signs out, return them to the landing screen.
@@ -1327,8 +1167,6 @@ function App() {
       style={nationColor ? { "--nation": nationColor } : undefined}
     >
       <MusicPlayer step={step} />
-      {guestReveal && <GuestCodeReveal code={guestReveal} onClose={() => setGuestReveal(null)} />}
-      {restoreOpen && <GuestRestore onClose={() => setRestoreOpen(false)} onRestored={onRestored} />}
       {step === "welcome" ? (
         <Welcome
           state={state} setState={setState}
@@ -1353,7 +1191,7 @@ function App() {
           )}
           {step === "confirm" && (
             <Confirm state={state} setState={setState}
-              onSubmit={submit} onSignUp={submitWithAccount} onBack={() => goTo("predict")}
+              onSubmit={submit} onBack={() => goTo("predict")}
               signedIn={auth.signedIn} />
           )}
           {step === "live" && (

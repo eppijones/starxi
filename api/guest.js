@@ -106,6 +106,11 @@ async function mergeGuestInto(guestUid, clerkUid) {
 }
 
 module.exports = async (req, res) => {
+  // Retired: guest recovery-codes are disabled — STAR XI is Clerk-account only.
+  // Kept as a stub so any cached client can't 404-loop; returns a clean signal.
+  return json(res, 410, { ok: false, error: "guest_disabled", message: "Guest play is retired — sign up with an account." });
+
+  // eslint-disable-next-line no-unreachable
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return json(res, 405, { ok: false, error: "method_not_allowed" });

@@ -127,7 +127,7 @@
   <!-- Data first (plain JS, sets globals) -->
   <!-- ?v= cache-bust: no build step, so bump this token on every deploy
        to force returning visitors past the browser's heuristic cache. -->
-  <script src="festival/data.js?v=20260605-fpl"></script>
+  <script src="festival/data.js?v=20260609-squads"></script>
   <!-- Shared live-results mapper (plain JS): one payload->fixtures impl for
        browser + /api leaderboard. Must load before live-data.js. -->
   <script src="festival/results-map.js?v=20260607-champfix"></script>
@@ -137,7 +137,7 @@
   <script src="festival/match-watch-core.js?v=20260601mw2"></script>
   <script src="festival/match-watch-client.js?v=20260601mw2"></script>
   <!-- Entry persistence glue (plain JS): save/load entries via /api/entry -->
-  <script src="festival/api.js?v=20260608-matchcentre"></script>
+  <script src="festival/api.js?v=20260608-clerkonly"></script>
   <!-- Local-draft identity reconcile (plain JS): keeps one account's team from
        leaking onto another on a shared browser. Must load before app.jsx. -->
   <script src="festival/identity-core.js?v=20260607-isolation"></script>
@@ -161,17 +161,17 @@
   <script type="text/babel" src="festival/auth.jsx?v=20260601z"></script>
   <!-- Shared step chrome (brand lockup + 100vh shell). Before Welcome (which reuses the lockup). -->
   <script type="text/babel" src="festival/StepShell.jsx?v=20260601aa"></script>
-  <script type="text/babel" src="festival/Welcome.jsx?v=20260607-guest"></script>
+  <script type="text/babel" src="festival/Welcome.jsx?v=20260608-clerkonly"></script>
   <script type="text/babel" src="festival/Predict.jsx?v=20260605-fpl"></script>
   <script type="text/babel" src="festival/DreamXI.jsx?v=20260605-fpl"></script>
-  <script type="text/babel" src="festival/Confirm.jsx?v=20260607-guest"></script>
+  <script type="text/babel" src="festival/Confirm.jsx?v=20260608-clerkonly"></script>
   <script type="text/babel" src="festival/Live.jsx?v=20260604-leagues"></script>
   <script type="text/babel" src="festival/History.jsx?v=20260601-sum3"></script>
   <script type="text/babel" src="festival/Leaderboard.jsx?v=20260608-matchcentre"></script>
   <script type="text/babel" src="festival/MatchCentre.jsx?v=20260608-matchcentre"></script>
   <script type="text/babel" src="festival/MatchWatch.jsx?v=20260601mw2"></script>
   <script type="text/babel" src="festival/MusicPlayer.jsx?v=20260601ag"></script>
-  <script type="text/babel" src="festival/app.jsx?v=20260608-matchcentre"></script>
+  <script type="text/babel" src="festival/app.jsx?v=20260608-clerkonly"></script>
 
   <!-- Vercel Speed Insights (Core Web Vitals) + Web Analytics (traffic).
        Served by Vercel's edge when each is enabled in the project dashboard;

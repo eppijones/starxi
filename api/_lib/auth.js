@@ -1,21 +1,14 @@
-// WORLD CUP XI — server-side session verification (Clerk accounts + guest codes).
+// WORLD CUP XI — server-side session verification (Clerk accounts only).
 //
-// The browser sends `Authorization: Bearer …` (see festival/api.js -> authedFetch).
-// Two kinds of bearer are accepted; either way the userId comes from the signed
-// token, never from the request body, so a player can only ever touch their OWN data:
-//
-//   • Guest session token  gt_<…>  — HMAC-signed by us; verified networklessly
-//     (no Clerk, no KV). Yields { userId:"g_…", guest:true }. See ./guest.js.
-//   • Clerk session JWT            — verified with @clerk/backend's verifyToken:
-//       · CLERK_JWT_KEY  -> networkless (PEM public key; fastest, no JWKS fetch)
-//       · CLERK_SECRET_KEY -> networked JWKS (cached between invocations)
-//     Yields { userId:"user_…", claims }.
-//
-// Guest tokens are tried first (cheap prefix check) so a guest never hits Clerk's
-// verifier. Endpoints that must be account-only check `auth.guest`.
+// The browser sends a Clerk session JWT as `Authorization: Bearer …` (see
+// festival/api.js -> authedFetch). The userId comes from the signed token, never
+// from the request body, so a player can only ever touch their OWN data. Locking
+// in a team requires a real account — the old guest recovery-code path is retired.
+//   • CLERK_JWT_KEY    -> networkless (PEM public key; fastest, no JWKS fetch)
+//   • CLERK_SECRET_KEY -> networked JWKS (cached between invocations)
+// Yields { userId:"user_…", claims }, or null when unauthenticated.
 
 const { verifyToken } = require("@clerk/backend");
-const { verifyGuestToken } = require("./guest");
 
 function bearer(req) {
   const h =
@@ -31,9 +24,8 @@ async function verifyRequest(req) {
   const token = bearer(req);
   if (!token) return null;
 
-  // Guest session tokens carry a gt_ prefix and verify locally — no Clerk round-trip.
-  if (token.slice(0, 3) === "gt_") return verifyGuestToken(token);
-
+  // Clerk accounts only — locking in a team requires a real account. (The old
+  // guest recovery-code path is retired; any leftover gt_ tokens won't verify.)
   const jwtKey = process.env.CLERK_JWT_KEY;
   const secretKey = process.env.CLERK_SECRET_KEY;
   if (!jwtKey && !secretKey) return null; // server not configured for auth

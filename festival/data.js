@@ -354,6 +354,7 @@ window.PLAYERS = [
   { id: "bra-danilo2", name: "Danilo", nat: "BRA", flag: "🇧🇷", pos: "MF", form: 6.7, hype: "Botafogo" },
   { id: "vini", name: "Vinícius Jr.", nat: "BRA", flag: "🇧🇷", pos: "FW", form: 9, hype: "FIFA Best 2024" },
   { id: "bra-raphinha", name: "Raphinha", nat: "BRA", flag: "🇧🇷", pos: "FW", form: 8.4, hype: "Barcelona" },
+  { id: "bra-rodrygo", name: "Rodrygo", nat: "BRA", flag: "🇧🇷", pos: "FW", form: 8.3, hype: "Real Madrid" },
   { id: "bra-cunha", name: "Matheus Cunha", nat: "BRA", flag: "🇧🇷", pos: "FW", form: 7.6, hype: "Manchester United" },
   { id: "bra-martinelli", name: "Gabriel Martinelli", nat: "BRA", flag: "🇧🇷", pos: "FW", form: 7.4, hype: "Arsenal" },
   { id: "bra-endrick", name: "Endrick", nat: "BRA", flag: "🇧🇷", pos: "FW", form: 7.3, hype: "Lyon (on loan from Real Madrid)" },
@@ -687,6 +688,7 @@ window.PLAYERS = [
   { id: "ned-brobbey", name: "Brian Brobbey", nat: "NED", flag: "🇳🇱", pos: "FW", form: 6.5, hype: "Sunderland" },
   // ——— Japan (JPN) ———
   { id: "jpn-suzuki", name: "Zion Suzuki", nat: "JPN", flag: "🇯🇵", pos: "GK", form: 7.2, hype: "Parma" },
+  { id: "jpn-mitoma", name: "Kaoru Mitoma", nat: "JPN", flag: "🇯🇵", pos: "FW", form: 8, hype: "Brighton" },
   { id: "jpn-osako", name: "Keisuke Osako", nat: "JPN", flag: "🇯🇵", pos: "GK", form: 6.6, hype: "Sanfrecce Hiroshima" },
   { id: "jpn-hayakawa", name: "Tomoki Hayakawa", nat: "JPN", flag: "🇯🇵", pos: "GK", form: 5.8, hype: "Kashima Antlers" },
   { id: "jpn-itakura", name: "Ko Itakura", nat: "JPN", flag: "🇯🇵", pos: "DF", form: 7.4, hype: "Ajax" },
@@ -1321,6 +1323,7 @@ window.PLAYERS = [
   { id: "eng-burn", name: "Dan Burn", nat: "ENG", flag: "🇬🇧", pos: "DF", form: 6.9, hype: "Newcastle United" },
   { id: "belling", name: "J. Bellingham", nat: "ENG", flag: "🇬🇧", pos: "MF", form: 8.7, hype: "Madrid's metronome" },
   { id: "eng-rice", name: "Declan Rice", nat: "ENG", flag: "🇬🇧", pos: "MF", form: 8, hype: "Arsenal" },
+  { id: "eng-foden", name: "Phil Foden", nat: "ENG", flag: "🇬🇧", pos: "MF", form: 8.4, hype: "Manchester City" },
   { id: "eng-eze", name: "Eberechi Eze", nat: "ENG", flag: "🇬🇧", pos: "MF", form: 7.6, hype: "Arsenal" },
   { id: "eng-rogers", name: "Morgan Rogers", nat: "ENG", flag: "🇬🇧", pos: "MF", form: 7.3, hype: "Aston Villa" },
   { id: "eng-anderson", name: "Elliot Anderson", nat: "ENG", flag: "🇬🇧", pos: "MF", form: 7.2, hype: "Nottingham Forest" },

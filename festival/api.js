@@ -7,40 +7,16 @@
 // localStorage remains the always-available source of truth for the UI.
 
 (function () {
-  // ——— Guest identity (play with a code, no sign-up) ———
-  // A guest's signed session token lives in localStorage and authenticates the
-  // very same /api routes a Clerk JWT does — the server treats the userId as
-  // opaque, so leaderboard, leagues and entry all "just work". When the player is
-  // signed into Clerk, that always takes precedence over the guest token.
-  const GUEST_TOKEN_KEY = "starxi.guestToken";
-  const GUEST_CODE_KEY = "starxi.guestCode";
-  function lsGet(k) { try { return window.localStorage.getItem(k) || null; } catch (e) { return null; } }
-  function guestToken() { return lsGet(GUEST_TOKEN_KEY); }
-  function guestCode() { return lsGet(GUEST_CODE_KEY); }
-  function setGuestSession(token, code) {
-    try {
-      if (token) window.localStorage.setItem(GUEST_TOKEN_KEY, token);
-      if (code) window.localStorage.setItem(GUEST_CODE_KEY, code);
-    } catch (e) {}
-  }
-  function clearGuest() {
-    try {
-      window.localStorage.removeItem(GUEST_TOKEN_KEY);
-      window.localStorage.removeItem(GUEST_CODE_KEY);
-    } catch (e) {}
-  }
-  // Mirror of the server's display format: groups of four (7K3P-9QX2-T8MZ).
-  function formatGuestCode(input) {
-    return String(input || "")
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, "")
-      .slice(0, 12)
-      .replace(/(.{4})(?=.)/g, "$1-");
-  }
+  // Identity is Clerk-only: locking in a team requires a real account (more
+  // bullet-proof than the old guest recovery-code system). We proactively clear
+  // any stale guest session left in localStorage from the old flow.
+  try {
+    window.localStorage.removeItem("starxi.guestToken");
+    window.localStorage.removeItem("starxi.guestCode");
+  } catch (e) {}
 
   async function authedFetch(path, opts) {
-    let token = window.clerkGetToken ? await window.clerkGetToken() : null;
-    if (!token) token = guestToken(); // signed-out players act as their guest identity
+    const token = window.clerkGetToken ? await window.clerkGetToken() : null;
     const headers = Object.assign(
       { "Content-Type": "application/json", accept: "application/json" },
       (opts && opts.headers) || {}
@@ -161,67 +137,6 @@
   const wcxiRemoveMember = (code, member) => wcxiLeagueAction("remove", { code: code, member: member });
   const wcxiDeleteLeague = (code) => wcxiLeagueAction("delete", { code: code });
 
-  // ——— Guest mint / redeem / claim ———
-  // Create a brand-new guest identity ("lock in with a code"). On success the
-  // session is stored, so every later authedFetch is this guest. Returns
-  // { ok, userId, code } or { ok:false } (API down / not configured → caller
-  // stays local-only). The display `code` is shown to the player to write down.
-  async function wcxiGuestMint() {
-    try {
-      const r = await fetch("/api/guest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ action: "mint" }),
-      });
-      const j = await r.json().catch(() => null);
-      if (!r.ok || !j || !j.ok) return { ok: false };
-      setGuestSession(j.token, j.code);
-      return { ok: true, userId: j.userId, code: j.code };
-    } catch (e) { return { ok: false }; }
-  }
-
-  // Restore a guest on a new device / after clearing storage: a code → a fresh
-  // session token. Returns { ok, userId } or { ok:false, error }.
-  async function wcxiGuestRedeem(code) {
-    try {
-      const r = await fetch("/api/guest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ action: "redeem", code: code }),
-      });
-      const j = await r.json().catch(() => null);
-      if (!r.ok || !j || !j.ok) return { ok: false, status: r.status, error: j && j.error };
-      // Server can't return the (hashed) code, so remember the player's own input.
-      setGuestSession(j.token, formatGuestCode(code));
-      return { ok: true, userId: j.userId };
-    } catch (e) { return { ok: false, error: String(e) }; }
-  }
-
-  // Upgrade the current guest into the signed-in Clerk account: the server merges
-  // the guest's entry, roster slot and leagues onto the account, then we drop the
-  // guest session. No-op when there's no guest or no account. Returns { ok, merged }.
-  async function wcxiGuestClaim() {
-    const gt = guestToken();
-    if (!gt) return { ok: false, error: "no_guest" };
-    const clerk = window.clerkGetToken ? await window.clerkGetToken() : null;
-    if (!clerk) return { ok: false, error: "no_account" };
-    try {
-      const r = await fetch("/api/guest", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          accept: "application/json",
-          Authorization: "Bearer " + clerk,
-        },
-        body: JSON.stringify({ action: "claim", guestToken: gt }),
-      });
-      const j = await r.json().catch(() => null);
-      if (!r.ok || !j || !j.ok) return { ok: false, status: r.status, error: j && j.error };
-      clearGuest();
-      return { ok: true, merged: !!j.merged };
-    } catch (e) { return { ok: false, error: String(e) }; }
-  }
-
   Object.assign(window, {
     wcxiSaveEntry,
     wcxiLoadEntry,
@@ -236,12 +151,5 @@
     wcxiRenameLeague,
     wcxiRemoveMember,
     wcxiDeleteLeague,
-    wcxiGuestMint,
-    wcxiGuestRedeem,
-    wcxiGuestClaim,
-    wcxiGuestToken: guestToken,
-    wcxiGuestCode: guestCode,
-    wcxiClearGuest: clearGuest,
-    wcxiFormatGuestCode: formatGuestCode,
   });
 })();

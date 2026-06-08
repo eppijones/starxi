@@ -1,6 +1,6 @@
 // STAR XI '26 — Screen 4: Confirm + scoring explainer
 
-function Confirm({ state, setState, onSubmit, onSignUp, onBack, signedIn }) {
+function Confirm({ state, setState, onSubmit, onBack, signedIn }) {
   const teamName = state.teamName || "";
   const setTeamName = (val) => setState(s => ({ ...s, teamName: val }));
   const [nameError, setNameError] = React.useState(false);
@@ -8,11 +8,6 @@ function Confirm({ state, setState, onSubmit, onSignUp, onBack, signedIn }) {
   function handleSubmit() {
     if (!canSubmit) { setNameError(true); return; }
     onSubmit();
-  }
-  // Secondary path: skip the guest code and create a real account up front.
-  function handleSignUp() {
-    if (!canSubmit) { setNameError(true); return; }
-    onSignUp && onSignUp();
   }
   const nation = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
   const bracket = state.bracket || { groups: {}, advances: {} };
@@ -188,17 +183,12 @@ function Confirm({ state, setState, onSubmit, onSignUp, onBack, signedIn }) {
         <span className="foot-note">
           {signedIn
             ? "Once you submit, you're in for the summer."
-            : "No sign-up needed — you'll get a code to save your team."}
+            : "You'll create a free account to lock in and save your team."}
         </span>
         <div className="confirm-foot-cta">
           <button className="pill primary" onClick={handleSubmit} disabled={false}>
-            {signedIn ? "✓ Submit — lock in" : "✓ Lock in & go live"} <span>→</span>
+            {signedIn ? "✓ Submit — lock in" : "✓ Sign up & lock in"} <span>→</span>
           </button>
-          {!signedIn && (
-            <button type="button" className="confirm-foot-alt" onClick={handleSignUp}>
-              or sign up with email
-            </button>
-          )}
         </div>
       </div>
     </div>

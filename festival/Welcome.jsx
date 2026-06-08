@@ -229,17 +229,6 @@ function LandingTopRight() {
             </svg>
             Log in
           </button>
-          <button
-            type="button"
-            onClick={() => window.starxiOpenRestore && window.starxiOpenRestore()}
-            style={{
-              background: "none", border: "none", padding: "2px 4px", cursor: "pointer",
-              color: "rgba(255,255,255,0.55)", fontSize: 9, fontWeight: 700,
-              letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap",
-              textAlign: "center",
-            }}
-            title="Restore a team you locked in with a code"
-          >Have a code? Restore</button>
         </React.Fragment>
       )}
     </div>
