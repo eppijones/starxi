@@ -136,11 +136,14 @@ function TeamDetail({ token, code, onClose }) {
   const roadGroupPts = d && d.predictionGroupPts || 0;
   const roadKoRounds = (d && d.road && d.road.rounds) || [];
   const perfectGroups = ((d && d.road && d.road.groups) || []).filter((g) => g.perfect).length;
+  // The nation's character figure — same artwork as the Live Starting XI card.
+  const figSrc = (d && d.nation && window.figureSrc) ? window.figureSrc(d.nation, "male", 0) : null;
 
   return (
     <div className="td-backdrop" onClick={onClose}>
       <div className="td-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="td-head">
+        <div className={"td-head" + (figSrc ? " has-figure" : "")}>
+          {figSrc && <img className="td-figure" src={figSrc} alt="" aria-hidden="true" />}
           <button className="td-close" onClick={onClose} aria-label="Close">×</button>
           {loading || !d ? (
             <div className="td-title">Loading team…</div>
@@ -633,7 +636,7 @@ function LbManage({ leagues, onChanged, onCreated, onJoined, onLeft, onClose }) 
   );
 }
 
-function Leaderboard({ onEditPicks, onBack }) {
+function Leaderboard({ onEditPicks, onBack, embedded }) {
   const auth = useClerkAuth();
   const [scope, setScope] = useState({ kind: "global", code: null }); // or {kind:"league",code} | {kind:"manage"}
   const [lbMode, setLbMode] = useState("combined"); // "combined" | "xionly"
@@ -696,10 +699,12 @@ function Leaderboard({ onEditPicks, onBack }) {
   }, [auth.signedIn, scope.kind]);
 
   if (!auth.loaded) {
+    const body = <div className="empty-state" style={{ padding: 24, textAlign: "center" }}>…</div>;
+    if (embedded) return <div className="lb-embed">{body}</div>;
     return (
       <div className="step-screen">
         <div className="step-scroll" style={{ display: "grid", placeItems: "center" }}>
-          <div className="empty-state">…</div>
+          {body}
         </div>
       </div>
     );
@@ -721,9 +726,7 @@ function Leaderboard({ onEditPicks, onBack }) {
 
   const activeLeague = scope.kind === "league" ? leagues.find((l) => l.code === scope.code) : null;
 
-  return (
-    <div className="step-screen">
-      <div className="step-scroll stagger">
+  const screen = (
         <div className="lb-screen">
           <div className="lb-head">
             <h2 className="lb-title">
@@ -809,20 +812,29 @@ function Leaderboard({ onEditPicks, onBack }) {
             />
           )}
         </div>
-      </div>
+  );
+
+  const teamModal = selectedTeam ? (
+    <TeamDetail
+      token={selectedTeam.token}
+      code={scope.kind === "league" ? scope.code : null}
+      onClose={() => setSelectedTeam(null)}
+    />
+  ) : null;
+
+  // Embedded (inside the Live screen's leagues slot): just the panel + modal,
+  // no step-screen chrome or footer. Otherwise the full leaderboard page.
+  if (embedded) return <div className="lb-embed">{screen}{teamModal}</div>;
+
+  return (
+    <div className="step-screen">
+      <div className="step-scroll stagger">{screen}</div>
       <div className="step-foot">
         <button className="pill ghost sm" onClick={onBack}>← Back to my entry</button>
         <span className="grow"></span>
         <button className="pill ghost sm" onClick={onEditPicks}>Edit my entry</button>
       </div>
-
-      {selectedTeam && (
-        <TeamDetail
-          token={selectedTeam.token}
-          code={scope.kind === "league" ? scope.code : null}
-          onClose={() => setSelectedTeam(null)}
-        />
-      )}
+      {teamModal}
     </div>
   );
 }

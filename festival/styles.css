@@ -5733,7 +5733,7 @@ input[type=range].mp-range::-moz-range-thumb {
 .td-sheet {
   width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto;
   background: #121C15; border: 1px solid rgba(255,255,255,.12);
-  border-radius: 20px 20px 0 0; box-shadow: 0 -10px 60px rgba(0,0,0,.5);
+  border-radius: 20px 20px 0 0; box-shadow: 0 6px 26px rgba(0,0,0,.32);
 }
 @media (min-width: 720px) { .td-sheet { border-radius: 20px; } }
 .td-head {
@@ -5802,3 +5802,28 @@ input[type=range].mp-range::-moz-range-thumb {
 .mc-score { font-family: var(--font-display); font-size: 15px; color: #fff; min-width: 44px; text-align: center; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+/* Team drill-down: nation character figure in the header (same art as the Live card) */
+.td-head.has-figure { padding-right: 124px; }
+.td-figure {
+  position: absolute; right: 8px; bottom: -14px; height: 158px; width: auto;
+  object-fit: contain; pointer-events: none;
+  filter: drop-shadow(0 8px 16px rgba(0,0,0,.45));
+}
+@media (max-width: 480px) {
+  .td-head.has-figure { padding-right: 92px; }
+  .td-figure { height: 124px; right: 4px; }
+}
+
+/* Embedded leaderboard inside the Live screen's leagues slot — same component as
+   the full page, just wrapped in a card and with a slightly smaller title. */
+.live-leagues-card {
+  background: var(--glass-dark);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-card);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  padding: 16px 18px; margin-top: 14px;
+}
+.lb-embed .lb-title { font-size: clamp(22px, 4.5vw, 32px); }
+.lb-embed .lb-screen { max-width: none; }

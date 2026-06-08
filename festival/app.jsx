@@ -703,7 +703,12 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onMatchCentre, onHi
               liveResults={liveResults}
               liveSim={liveSim}
             />
-            <LeaguesPreview auth={auth} onLeaderboard={onLeaderboard} />
+            {/* Full interactive leaderboard, embedded — same component & behaviour
+                as the dedicated Leaderboard page (scope/stage/mode tabs, clickable
+                team drill-down) so the two are never out of sync. */}
+            <div className="live-leagues-card">
+              <Leaderboard embedded onEditPicks={onEditPicks} onBack={onLeaderboard} />
+            </div>
             {/* Match Centre — all World Cup fixtures + live scores */}
             <button className="road-opener mc-opener" onClick={onMatchCentre}>
               <span className="ro-chev">📅</span>
