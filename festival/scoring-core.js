@@ -59,6 +59,20 @@
     };
   }
 })(this, function () {
+  // ——— Retired-player-id aliases ———
+  // A squad-data refresh that RE-IDs a player (e.g. nor-degaard → nor-odegaard)
+  // must never silently break an already-saved pick. We resolve every pick id
+  // through this map before looking the player up, so old entries keep scoring.
+  // Source: player-aliases.js (require in Node, the window global in the browser).
+  var ALIAS_MAP = {};
+  try {
+    if (typeof module !== "undefined" && module.exports && typeof require === "function") {
+      ALIAS_MAP = (require("./player-aliases") || {}).PLAYER_ID_ALIASES || {};
+    } else if (typeof window !== "undefined" && window.PLAYER_ID_ALIASES) {
+      ALIAS_MAP = window.PLAYER_ID_ALIASES;
+    }
+  } catch (e) { ALIAS_MAP = {}; }
+
   // ——— Road-to-the-Final bracket scoring ———
   // `prediction` and `actual` share the same shape:
   //   { groups: {A:[1st,2nd,3rd,4th], …}, advances: {r32:{…},r16:{…},qf:{…},sf:{…},final:code} }
@@ -155,13 +169,16 @@
       var actRound = aAdv[round] || {};
       var actCodes = {};
       // For r32..sf: each match returns one code. For final: a single code at
-      // key 0 OR a top-level `final` string — accept both shapes.
+      // key 0 OR a top-level `final` string — accept both shapes. We coerce to a
+      // STRING code (or null): an unset final is `{}` (an empty object), which is
+      // truthy — without this guard an empty prediction would "match" an empty
+      // actual and award a phantom champion (+16). Only real codes count.
       if (round === "final") {
         var actChamp = actRound[0] || aAdv.final;
-        if (actChamp) actCodes[actChamp] = true;
+        if (typeof actChamp === "string") actCodes[actChamp] = true;
       } else {
         Object.keys(actRound).forEach(function (k) {
-          if (actRound[k]) actCodes[actRound[k]] = true;
+          if (typeof actRound[k] === "string") actCodes[actRound[k]] = true;
         });
       }
       var hits = 0, pts = 0;
@@ -170,6 +187,7 @@
         var pick;
         if (round === "final") pick = predRound[0] || pAdv.final;
         else pick = predRound[i];
+        if (typeof pick !== "string") pick = null;
         if (pick && actCodes[pick]) {
           hits++;
           var p2 = per;
@@ -258,6 +276,12 @@
     var PLAYERS = (data && data.PLAYERS) || [];
     var byId = {};
     PLAYERS.forEach(function (p) { byId[p.id] = p; });
+    // Make every retired id resolve to its current player, so a pick saved before
+    // a squad refresh still finds (and scores) the right player.
+    Object.keys(ALIAS_MAP).forEach(function (oldId) {
+      var cur = ALIAS_MAP[oldId];
+      if (byId[cur] && !byId[oldId]) byId[oldId] = byId[cur];
+    });
 
     var picks = state.picks || [];
     var captain = state.captain;
@@ -300,7 +324,9 @@
 
     var xiGroupPts = 0;
     var xiKnockoutPts = 0;
+    var orphanPicks = []; // picks that resolve to no player even after aliasing
     var xiBreakdown = picks.map(function (originalId) {
+      if (!byId[originalId]) orphanPicks.push(originalId);
       var total = 0;
       var mdLines = MD_ALL.map(function (md) {
         var activeId = activeIdAt(originalId, md);
@@ -362,6 +388,7 @@
       nationCalled: nationCalled,
       matchBreakdown: matchBreakdown,
       xiBreakdown: xiBreakdown,
+      orphanPicks: orphanPicks,  // picks no longer in the squad pool (surface, don't hide)
       bracketDetail: br,    // group + round breakdown, for the Live/locked UI
 
       // ——— Stage split (so the leaderboard can rank on any stage × mode) ———

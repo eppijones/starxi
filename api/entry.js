@@ -116,18 +116,28 @@ function sanitizeBracket(b) {
   return { groups, lucky3rds, advances: adv };
 }
 
+// Resolve retired player ids to their current ones, so an entry saved before a
+// squad refresh is auto-migrated to canonical ids on its next save.
+const { resolvePid } = require("../festival/player-aliases");
+
 function sanitize(e) {
   e = e && typeof e === "object" ? e : {};
+  const captainByMd = {};
+  if (e.captainByMd && typeof e.captainByMd === "object") {
+    Object.keys(e.captainByMd).forEach((md) => { captainByMd[md] = resolvePid(e.captainByMd[md]); });
+  }
+  const swaps = Array.isArray(e.swaps)
+    ? e.swaps.map((sw) => (sw && typeof sw === "object" ? { ...sw, from: resolvePid(sw.from), to: resolvePid(sw.to) } : sw))
+    : [];
   return {
     nation: typeof e.nation === "string" ? e.nation : null,
     bracket: sanitizeBracket(e.bracket),
-    picks: Array.isArray(e.picks) ? e.picks.slice(0, 11) : [],
+    picks: Array.isArray(e.picks) ? e.picks.slice(0, 11).map(resolvePid) : [],
     formation: typeof e.formation === "string" ? e.formation : "4-3-3",
-    captain: e.captain != null ? e.captain : null,
+    captain: e.captain != null ? resolvePid(e.captain) : null,
     captainPlus: !!e.captainPlus,
-    captainByMd:
-      e.captainByMd && typeof e.captainByMd === "object" ? e.captainByMd : {},
-    swaps: Array.isArray(e.swaps) ? e.swaps : [],
+    captainByMd: captainByMd,
+    swaps: swaps,
   };
 }
 

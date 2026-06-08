@@ -94,6 +94,18 @@ eq("knockout points (r32 hit 1 + final 16)", br1.knockoutPoints, 17);
 eq("total points", br1.points, 20);
 eq("bullseyes (champion only, group not perfect)", br1.bullseyes, 1);
 
+// Regression: an EMPTY bracket must score 0 against an empty actual — an unset
+// final is `{}` (truthy object), which once mis-registered as a phantom champion.
+const emptyBr = { groups: {}, lucky3rds: [], advances: { r32: {}, r16: {}, qf: {}, sf: {}, final: {} } };
+eq("empty prediction vs empty actual → 0 (no phantom champion)",
+  scoreBracket(emptyBr, emptyBr, null).points, 0);
+eq("empty prediction vs real champion → 0",
+  scoreBracket(emptyBr, { groups: {}, advances: { final: { 0: "ARG" } } }, null).points, 0);
+eq("real champion pick, no actual yet → 0",
+  scoreBracket({ groups: {}, advances: { final: { 0: "ARG" } } }, emptyBr, null).points, 0);
+eq("correct champion → 16",
+  scoreBracket({ groups: {}, advances: { final: { 0: "ARG" } } }, { groups: {}, advances: { final: { 0: "ARG" } } }, null).points, 16);
+
 // Home-nation doubling: nation X (group slot) + CHAMP final pick.
 const br2 = scoreBracket(
   { groups: { A: ["X", "Y", "Z", "W"] }, advances: { final: { 0: "CHAMP" } } },
@@ -297,6 +309,50 @@ eq("open play with assist",
 eq("assist ended by period",
   parseGoal("Goal!  Argentina 2, France 2. Kylian Mbappé (France) right footed shot from the left side of the box to the bottom right corner. Assisted by Marcus Thuram."),
   { scorer: "Kylian Mbappé", assist: "Marcus Thuram" });
+
+// ——— Local-draft identity isolation (no cross-account bleed) ———
+section("identity reconcile — local draft can't leak across accounts");
+const { starxiReconcileAction } = require("../festival/identity-core");
+const RA = starxiReconcileAction;
+// Owner already matches → trust the fast local copy.
+eq("own draft, no server entry → keep", RA("u:A", "u:A", false), "keep");
+eq("own draft, has server entry → keep", RA("u:A", "u:A", true), "keep");
+eq("anonymous keeps own draft", RA("anon", "anon", false), "keep");
+eq("legacy null draft as anon → keep", RA(null, "anon", false), "keep");
+// THE BUG: sign into B while A's submitted team is in localStorage.
+eq("switch A→B, B has entry → load B's team", RA("u:A", "u:B", true), "load");
+eq("switch A→B, B has NO entry → WIPE (never show A's team)", RA("u:A", "u:B", false), "wipe");
+eq("sign out (A's leftover, now anon) → wipe", RA("u:A", "anon", false), "wipe");
+// Legit carry-overs.
+eq("new sign-up: anon draft + fresh account → adopt", RA("anon", "u:A", false), "adopt");
+eq("legacy null draft + fresh account → adopt", RA(null, "u:A", false), "adopt");
+eq("guest→account claim settling → adopt", RA("g:tok123", "u:A", false), "adopt");
+// Returning user (post-deploy legacy draft, or fresh device) → server is truth.
+eq("legacy draft + account with entry → load", RA("anon", "u:A", true), "load");
+eq("guest with own server entry → load", RA("g:tok", "g:tok", true), "keep");
+
+// ——— Player-ID stability: the freeze lock + alias map ———
+// This is the guard that prevents a repeat of the squad-refresh that silently
+// orphaned saved picks. The lock is the set of ids that exist at launch; every
+// one MUST stay resolvable (in the pool, or via an alias to a real player). A
+// future data edit that drops/renames an id without adding an alias fails here.
+section("player-id stability — freeze lock + aliases");
+const idLock = require("./player-ids.lock.json");
+const { PLAYER_ID_ALIASES, resolvePid: rpid } = require("../festival/player-aliases");
+const curIds = new Set(GAME.PLAYERS.map((p) => p.id));
+const unresolved = idLock.filter((id) => !curIds.has(id) && !(PLAYER_ID_ALIASES[id] && curIds.has(PLAYER_ID_ALIASES[id])));
+if (unresolved.length) console.log("    ✗ dropped ids needing an alias:", unresolved.slice(0, 10).join(", "), unresolved.length > 10 ? "…" : "");
+eq("every locked launch id still resolves (no silent drops)", unresolved.length, 0);
+eq("every alias points to a real current player", Object.values(PLAYER_ID_ALIASES).filter((t) => !curIds.has(t)).length, 0);
+eq("no alias chains (target is never itself an alias key)", Object.values(PLAYER_ID_ALIASES).filter((t) => PLAYER_ID_ALIASES[t]).length, 0);
+eq("resolvePid maps a known retired id", rpid("nor-degaard"), "nor-odegaard");
+eq("resolvePid passes a valid id through unchanged", rpid("haaland"), "haaland");
+eq("tallyUser scores a pick saved under its OLD id (via alias)",
+  tallyUser({ picks: ["nor-degaard"], bracket: { groups: {}, advances: {} } },
+    { results: {}, bracket: null, playerEvents: { "nor-odegaard": { byMd: [{ goals: 1 }, {}, {}, {}, {}, {}, {}, {}] } } }, GAME).xiPts, 5);
+eq("tallyUser surfaces a genuinely-removed pick as an orphan (not silent 0)",
+  tallyUser({ picks: ["tstegen"], bracket: { groups: {}, advances: {} } }, { results: {}, bracket: null, playerEvents: {} }, GAME).orphanPicks,
+  ["tstegen"]);
 
 // ——— Summary ———
 console.log(`\n${"─".repeat(48)}`);

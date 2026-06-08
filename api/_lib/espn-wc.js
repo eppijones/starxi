@@ -61,8 +61,13 @@ function isGoalEvent(e) {
 }
 
 // One match summary -> [{ teamTla, playerName, goals, assists }] rows.
-async function summaryRows(eventId, utcDate) {
-  const j = await fetchJson(`${ESPN_BASE}/summary?event=${encodeURIComponent(eventId)}`);
+// `leaguePath` defaults to the World Cup; a TEST event can point at e.g.
+// "fifa.friendly" so a pre-tournament friendly can be scored as a dress rehearsal.
+async function summaryRows(eventId, utcDate, leaguePath) {
+  const base = leaguePath
+    ? `https://site.api.espn.com/apis/site/v2/sports/soccer/${leaguePath}`
+    : ESPN_BASE;
+  const j = await fetchJson(`${base}/summary?event=${encodeURIComponent(eventId)}`);
   if (!j) return [];
   // team id -> abbreviation, from the header competitors.
   const comps = (((j.header || {}).competitions || [])[0] || {}).competitors || [];
@@ -126,9 +131,30 @@ async function worldCupStats(opts) {
   const stats = [];
   perMatch.forEach((rows) => { if (Array.isArray(rows)) stats.push(...rows); });
 
+  // ——— TEMPORARY: pre-tournament dress-rehearsal injection ———
+  // When STARXI_TEST_EVENTS is set (e.g. "fifa.friendly/401866598"), also score
+  // those non-WC matches, re-dating their goals to STARXI_TEST_MAPDATE (a real WC
+  // matchday, default the Jun 11 opener = MD1) so the leaderboard's day→matchday
+  // map picks them up. Purely additive + env-gated: unset the var and the real WC
+  // pipeline is untouched. REMOVE after testing.
+  let test = false;
+  const testSpec = process.env.STARXI_TEST_EVENTS;
+  if (testSpec) {
+    test = true;
+    const mapDate = process.env.STARXI_TEST_MAPDATE || "2026-06-11T19:00:00Z";
+    const specs = testSpec.split(",").map((s) => s.trim()).filter(Boolean);
+    const testRows = await pooled(specs, async (spec) => {
+      const [league, id] = spec.split("/");
+      if (!id) return [];
+      return summaryRows(id, mapDate, league); // never cached — small + we want it live
+    }, started);
+    testRows.forEach((rows) => { if (Array.isArray(rows)) stats.push(...rows); });
+  }
+
   return {
     configured: true,
     source: "espn",
+    test,
     updatedAt: new Date().toISOString(),
     played: playable.filter((e) => e.state === "post").length,
     count: stats.length,
