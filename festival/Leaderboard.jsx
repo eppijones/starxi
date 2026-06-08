@@ -54,7 +54,7 @@ function LbRow({ row, mode, stage, tied, onSelect }) {
     if (nation > 0) bits.push(`+${nation}🏴 nation`);
     if (row.bullseyes) bits.push(`${row.bullseyes} perfect`);
   }
-  const sub = bits.join(" · ") || (mode === "xionly" ? "Star XI only" : "no picks yet");
+  const sub = bits.join(" · ");
   const ultimate = mode === "combined" && stage === "all" && row.rank === 1 && row.xiPts > 0 && row.predictionPts > 0;
   return (
     <div
@@ -72,7 +72,7 @@ function LbRow({ row, mode, stage, tied, onSelect }) {
           <span className="lb-crown" title="Ultimate champion: tops the table with a strong XI and Road picks">👑</span>
         )}
         {tied && <span className="lb-tie" title="Tied on points — broken by perfect calls (★), then who locked in first">=</span>}
-        <small>{sub}</small>
+        {sub && <small>{sub}</small>}
       </span>
       <span className="pts">{row.pts}</span>
       {onSelect && <span className="lb-row-caret" aria-hidden="true">›</span>}
@@ -292,22 +292,6 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, stage, onStageC
         </div>
       )}
 
-      {/* Mode switcher — hidden when league has RTF disabled (forced xionly) */}
-      {!rtfLocked && (
-        <div className="lb-mode-tabs">
-          <button
-            className={"lb-mode-tab" + (activeMode !== "xionly" ? " sel" : "")}
-            onClick={() => onModeChange("combined")}
-          >Combined</button>
-          <button
-            className={"lb-mode-tab" + (activeMode === "xionly" ? " sel" : "")}
-            onClick={() => onModeChange("xionly")}
-          >Star XI only</button>
-        </div>
-      )}
-
-      <LbBanter data={data} />
-
       {/* Nudge: you have no Road-to-Final picks but others might */}
       {you && you.predictionPts === 0 && activeMode !== "xionly" && !rtfLocked && (
         <div className="lb-rtf-nudge">
@@ -347,15 +331,7 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, stage, onStageC
       )}
 
       <p className="lb-legend">
-        {activeStage === "knockout"
-          ? <>Knockout race — Star XI knockout points, your <strong>nation's deep run</strong> 🏴, and Road-to-the-Final advances. </>
-          : activeStage === "group"
-            ? <>Group-stage race — Star XI group points and your group-table calls. </>
-            : null}
-        {activeMode === "xionly"
-          ? <>Ranked on <strong>Star XI points</strong>; Road picks excluded.</>
-          : <>Ranked on <strong>combined points</strong> (Star XI + Road). Top both for the <strong>ultimate champion</strong> 👑.</>
-        }
+        Total = your <strong>Star XI</strong> + <strong>Road to the Final</strong> bonuses.
         {" "}<span className="lb-legend-tie">Ties break on perfect calls (★), then who locked in first.</span>
       </p>
     </div>
