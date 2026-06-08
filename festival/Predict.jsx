@@ -70,24 +70,41 @@ function PointsInfoModal({ onClose }) {
 }
 
 const RTF_GROUP_LETTERS = "ABCDEFGHIJKL".split("");
-const RTF_SUB_COUNT     = 18;     // 12 groups + Lucky 8 + R32 + R16 + QF + SF + Final
-const RTF_LUCKY_SUB     = 12;
-const RTF_KO_START      = 13;
-const RTF_FINAL_SUB     = 17;
+// Flow is now ONE combined Groups screen + Lucky 8 + R32 + R16 + QF + SF + Final.
+const RTF_GROUPS_SUB = 0;   // all 12 groups, on a single screen
+const RTF_LUCKY_SUB  = 1;
+const RTF_KO_START   = 2;   // r32 = 2, r16 = 3, qf = 4, sf = 5
+const RTF_FINAL_SUB  = 6;
+const RTF_SUB_COUNT  = 7;
 // Per-round points-per-correct-pick. Matches scoring-core.js.
 const RTF_KO_PTS = { r32: 1, r16: 2, qf: 4, sf: 8, final: 16 };
 
-// Normalise whatever the player has saved into a fully-shaped bracket. Used
-// both as "load with defaults" and as "empty bracket" (pass null) so we don't
-// need a separate emptyBracket helper inside this file.
+// Is `arr` a complete, valid 1st→4th ordering of group `letter`'s four teams?
+function rtfValidGroupOrder(arr, letter) {
+  const teams = window.GROUPS[letter] || [];
+  if (!Array.isArray(arr) || arr.length !== 4 || arr.some((c) => !c)) return false;
+  const codes = new Set(teams.map((t) => t.code));
+  if (arr.some((c) => !codes.has(c))) return false;
+  return new Set(arr).size === 4;
+}
+
+// Normalise whatever the player has saved into a fully-shaped bracket. Groups
+// are ALWAYS returned fully populated: a saved group is kept only when it's a
+// valid complete ordering, otherwise it falls back to FIFA-rank order (so a
+// fresh entry, a partial load, or Clear all land on the pre-seeded ladders).
+// Pass null to get the all-defaults bracket.
 function rtfEnsureBracket(b) {
   const out = {
     groups: {},
     lucky3rds: [],
     advances: { r32: {}, r16: {}, qf: {}, sf: {}, final: {} },
   };
+  const defaults = window.rankedGroups();
+  RTF_GROUP_LETTERS.forEach((letter) => {
+    const saved = b && b.groups && b.groups[letter];
+    out.groups[letter] = rtfValidGroupOrder(saved, letter) ? saved.slice() : defaults[letter];
+  });
   if (!b) return out;
-  out.groups = b.groups ? { ...b.groups } : {};
   out.lucky3rds = Array.isArray(b.lucky3rds) ? b.lucky3rds.slice(0, 8) : [];
   const adv = b.advances || {};
   ["r32", "r16", "qf", "sf", "final"].forEach((k) => {
@@ -117,13 +134,11 @@ function rtfRoundCount(bracket, round) {
   return n;
 }
 
-// Resume the player where they left off: first incomplete group, then the
-// Lucky-8 step, then first incomplete knockout round, otherwise the champion.
+// Resume the player where they left off. Groups are pre-seeded by FIFA rank, so
+// the road always opens on the (single) Groups screen unless the player has
+// already moved past the Lucky-8 into the knockouts.
 function rtfFindStartSub(bracket) {
-  for (let i = 0; i < 12; i++) {
-    if (!rtfGroupDone(bracket, RTF_GROUP_LETTERS[i])) return i;
-  }
-  if (!rtfLuckyDone(bracket)) return RTF_LUCKY_SUB;
+  if (!rtfLuckyDone(bracket)) return RTF_GROUPS_SUB;
   const rounds = ["r32", "r16", "qf", "sf", "final"];
   for (let i = 0; i < rounds.length; i++) {
     if (!rtfRoundDone(bracket, rounds[i])) return RTF_KO_START + i;
@@ -222,9 +237,9 @@ function Predict({ state, setState, onNext, onBack }) {
   };
 
   const clearAll = () => {
-    if (!confirm("Clear all your group + knockout picks?")) return;
+    if (!confirm("Reset every group to FIFA-rank order and clear all knockout picks?")) return;
     setState((s) => ({ ...s, bracket: rtfEnsureBracket(null) }));
-    setSub(0);
+    setSub(RTF_GROUPS_SUB);
   };
 
   // Auto-fill everything: groups by FIFA rank, Lucky-8 by FIFA rank, then all
@@ -287,45 +302,40 @@ function Predict({ state, setState, onNext, onBack }) {
   };
 
   // ——— Navigation ———
-  const groupsCompleted = useMemo(
-    () => RTF_GROUP_LETTERS.filter((g) => rtfGroupDone(bracket, g)).length,
-    [bracket]
-  );
-  const groupsAllDone = groupsCompleted === 12;
+  // Groups are pre-seeded by FIFA rank, so they're always complete — the gate
+  // is now only the Lucky-8 before the knockouts unlock.
   const luckyDone = rtfLuckyDone(bracket);
 
   const goPrev = () => {
-    if (sub === 0) { onBack(); return; }
+    if (sub === RTF_GROUPS_SUB) { onBack(); return; }
     setSub((s) => s - 1);
   };
   const goNext = () => {
     if (sub === RTF_SUB_COUNT - 1) { onNext(); return; }
-    if (sub === 11 && !groupsAllDone) return;
     if (sub === RTF_LUCKY_SUB && !luckyDone) return;
     setSub((s) => s + 1);
   };
 
   const nextLabel =
-    sub < 11 ? "Next group →"
-    : sub === 11 ? (groupsAllDone ? "Pick the Lucky 8 →" : `Finish ${12 - groupsCompleted} group${groupsCompleted === 11 ? "" : "s"} first`)
+    sub === RTF_GROUPS_SUB ? "Lock groups · pick the Lucky 8 →"
     : sub === RTF_LUCKY_SUB ? (luckyDone ? "On to R32 →" : `Pick ${8 - (bracket.lucky3rds || []).length} more 3rd${(bracket.lucky3rds || []).length === 7 ? "" : "s"}`)
-    : sub === 13 ? "On to R16 →"
-    : sub === 14 ? "On to Quarters →"
-    : sub === 15 ? "On to Semis →"
-    : sub === 16 ? "Pick a champion →"
+    : sub === RTF_KO_START ? "On to R16 →"
+    : sub === RTF_KO_START + 1 ? "On to Quarters →"
+    : sub === RTF_KO_START + 2 ? "On to Semis →"
+    : sub === RTF_KO_START + 3 ? "Pick a champion →"
     :              "Confirm →";
 
   const subTitle =
-    sub < 12 ? `Group ${RTF_GROUP_LETTERS[sub]}`
+    sub === RTF_GROUPS_SUB ? "Group stage"
     : sub === RTF_LUCKY_SUB ? "Best 3rd-Placed"
-    : sub === 13 ? "Round of 32"
-    : sub === 14 ? "Round of 16"
-    : sub === 15 ? "Quarterfinals"
-    : sub === 16 ? "Semifinals"
+    : sub === RTF_KO_START ? "Round of 32"
+    : sub === RTF_KO_START + 1 ? "Round of 16"
+    : sub === RTF_KO_START + 2 ? "Quarterfinals"
+    : sub === RTF_KO_START + 3 ? "Semifinals"
     :              "Final";
 
   const subCount = (() => {
-    if (sub < 12) return `${sub + 1} of 12 groups`;
+    if (sub === RTF_GROUPS_SUB) return "12 groups · pre-seeded by FIFA rank";
     if (sub === RTF_LUCKY_SUB) return `${(bracket.lucky3rds || []).length}/8 picked`;
     const round = ["r32", "r16", "qf", "sf", "final"][sub - RTF_KO_START];
     return `${rtfRoundCount(bracket, round)}/${window.KO_ROUND_SIZES[round]} picked`;
@@ -339,10 +349,9 @@ function Predict({ state, setState, onNext, onBack }) {
     + ["r32", "r16", "qf", "sf", "final"].reduce((n, r) => n + rtfRoundCount(bracket, r), 0);
   const pct = (madePicks / totalPicks) * 100;
 
-  const nextDisabled = (sub === 11 && !groupsAllDone) || (sub === RTF_LUCKY_SUB && !luckyDone);
-  const nextTitle =
-    sub === 11 && !groupsAllDone ? "Finish all 12 group ladders to unlock the Lucky 8"
-    : sub === RTF_LUCKY_SUB && !luckyDone ? "Pick your 8 advancing 3rds to unlock the knockouts"
+  const nextDisabled = sub === RTF_LUCKY_SUB && !luckyDone;
+  const nextTitle = sub === RTF_LUCKY_SUB && !luckyDone
+    ? "Pick your 8 advancing 3rds to unlock the knockouts"
     : "";
 
   return (
@@ -354,20 +363,18 @@ function Predict({ state, setState, onNext, onBack }) {
             below the progress strip — so nothing ever pushes the round content
             down on entry. The pane simply opens at the top. */}
         <div className="rtf-body" key={sub}>
-          {sub >= 12 && (
+          {sub >= RTF_LUCKY_SUB && (
             <div className="rtf-subhead">
               <h3 className="rtf-subtitle">{subTitle}</h3>
               <span className="rtf-subcount">{subCount}</span>
             </div>
           )}
 
-          {sub < 12 ? (
-            <GroupBoard
-              letter={RTF_GROUP_LETTERS[sub]}
-              teams={window.GROUPS[RTF_GROUP_LETTERS[sub]]}
-              ordering={bracket.groups[RTF_GROUP_LETTERS[sub]] || [null, null, null, null]}
+          {sub === RTF_GROUPS_SUB ? (
+            <AllGroupsBoard
+              bracket={bracket}
               nationCode={nationCode}
-              onSet={(o) => setGroup(RTF_GROUP_LETTERS[sub], o)}
+              onSetGroup={setGroup}
             />
           ) : sub === RTF_LUCKY_SUB ? (
             <BestThirdsBoard
@@ -395,7 +402,6 @@ function Predict({ state, setState, onNext, onBack }) {
           sub={sub}
           setSub={setSub}
           bracket={bracket}
-          groupsAllDone={groupsAllDone}
           luckyDone={luckyDone}
         />
 
@@ -407,10 +413,10 @@ function Predict({ state, setState, onNext, onBack }) {
             ℹ Points
           </button>
           <button className="btn ghost sm" onClick={() => onNext()}>Skip to confirm</button>
-          <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillAll} title="Auto-rank all groups by FIFA rank, pick the top 8 third-placed teams, and fill every knockout match with the higher-ranked side">
+          <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillAll} title="Keep FIFA-rank groups, pick the top 8 third-placed teams, and fill every knockout match with the higher-ranked side">
             ⚡ Auto-fill all
           </button>
-          {groupsAllDone && luckyDone && (
+          {luckyDone && (
             <button className="btn ghost sm rtf-autofill-btn" onClick={autoFillKnockouts} title="Pick the higher-ranked team in every remaining knockout match">
               ⚡ Auto-fill knockouts
             </button>
@@ -437,33 +443,27 @@ function Predict({ state, setState, onNext, onBack }) {
   );
 }
 
-// ——— Progress strip: groups row + a Lucky-8 cell + knockout rounds ———
-function RtfProgressStrip({ sub, setSub, bracket, groupsAllDone, luckyDone }) {
-  const groupCells = RTF_GROUP_LETTERS.map((g, i) => {
-    const done = rtfGroupDone(bracket, g);
-    const active = sub === i;
-    return (
-      <button
-        key={g}
-        className={"rtf-dot grp" + (active ? " active" : "") + (done ? " done" : "")}
-        title={`Group ${g}${done ? " (set)" : ""}`}
-        onClick={() => setSub(i)}
-      >{g}</button>
-    );
-  });
+// ——— Progress strip: a single Groups cell + a Lucky-8 cell + knockout rounds ———
+function RtfProgressStrip({ sub, setSub, bracket, luckyDone }) {
   const koCells = [
-    { key: "lucky", subIdx: RTF_LUCKY_SUB,  label: "3rds", done: luckyDone, locked: !groupsAllDone },
-    { key: "r32",   subIdx: RTF_KO_START,   label: "R32",  done: rtfRoundDone(bracket, "r32"),   locked: !groupsAllDone || !luckyDone },
-    { key: "r16",   subIdx: RTF_KO_START+1, label: "R16",  done: rtfRoundDone(bracket, "r16"),   locked: !groupsAllDone || !luckyDone },
-    { key: "qf",    subIdx: RTF_KO_START+2, label: "QF",   done: rtfRoundDone(bracket, "qf"),    locked: !groupsAllDone || !luckyDone },
-    { key: "sf",    subIdx: RTF_KO_START+3, label: "SF",   done: rtfRoundDone(bracket, "sf"),    locked: !groupsAllDone || !luckyDone },
-    { key: "final", subIdx: RTF_FINAL_SUB,  label: "🏆",   done: rtfRoundDone(bracket, "final"), locked: !groupsAllDone || !luckyDone },
+    { key: "lucky", subIdx: RTF_LUCKY_SUB,    label: "3rds", done: luckyDone, locked: false },
+    { key: "r32",   subIdx: RTF_KO_START,     label: "R32",  done: rtfRoundDone(bracket, "r32"),   locked: !luckyDone },
+    { key: "r16",   subIdx: RTF_KO_START + 1, label: "R16",  done: rtfRoundDone(bracket, "r16"),   locked: !luckyDone },
+    { key: "qf",    subIdx: RTF_KO_START + 2, label: "QF",   done: rtfRoundDone(bracket, "qf"),    locked: !luckyDone },
+    { key: "sf",    subIdx: RTF_KO_START + 3, label: "SF",   done: rtfRoundDone(bracket, "sf"),    locked: !luckyDone },
+    { key: "final", subIdx: RTF_FINAL_SUB,    label: "🏆",   done: rtfRoundDone(bracket, "final"), locked: !luckyDone },
   ];
   return (
     <div className="rtf-progress">
       <div className="rtf-progress-row">
         <span className="rtf-prog-label">Groups</span>
-        <div className="rtf-prog-cells">{groupCells}</div>
+        <div className="rtf-prog-cells">
+          <button
+            className={"rtf-dot grp wide done" + (sub === RTF_GROUPS_SUB ? " active" : "")}
+            title="All 12 groups"
+            onClick={() => setSub(RTF_GROUPS_SUB)}
+          >All 12 groups ✓</button>
+        </div>
       </div>
       <div className="rtf-progress-row">
         <span className="rtf-prog-label">Knockouts</span>
@@ -476,7 +476,7 @@ function RtfProgressStrip({ sub, setSub, bracket, groupsAllDone, luckyDone }) {
                 className={"rtf-dot ko" + (active ? " active" : "") + (c.done ? " done" : "") + (c.locked ? " locked" : "")}
                 onClick={() => { if (!c.locked) setSub(c.subIdx); }}
                 disabled={c.locked}
-                title={c.locked ? "Finish your group ladders first" : c.label}
+                title={c.locked ? "Pick your Lucky 8 first" : c.label}
               >{c.label}</button>
             );
           })}
@@ -494,68 +494,72 @@ const RTF_SLOT_META = [
   { medal: "▪",  rank: "4th", cls: "q4", badge: "out",     badgeText: "Out" },
 ];
 
-function GroupBoard({ letter, teams, ordering, nationCode, onSet }) {
+// All 12 groups on a single screen — pre-seeded by FIFA rank, reorder-only.
+function AllGroupsBoard({ bracket, nationCode, onSetGroup }) {
+  return (
+    <div className="rtf-allgroups">
+      <div className="rtf-subhead">
+        <h3 className="rtf-subtitle">Group stage</h3>
+        <span className="rtf-subcount">12 groups · pre-seeded by FIFA rank</span>
+      </div>
+
+      <div className="rtf-ag-cue">
+        <span className="rtf-ag-cue-ico" aria-hidden="true">⚽</span>
+        <p>
+          <strong>Every group is already filled in FIFA-rank order.</strong> Just reorder
+          the upsets — drag a team (or tap ▲▼) to set who finishes 1st → 4th. The top two
+          go through; the best eight 3rd-placed teams sneak in after.
+        </p>
+        <span className="rtf-ag-legend">
+          <i><b className="lg-thru" />Top 2 through</i>
+          <i><b className="lg-maybe" />3rd · maybe</i>
+          <i><b className="lg-out" />4th · out</i>
+        </span>
+      </div>
+
+      <div className="rtf-ag-grid">
+        {RTF_GROUP_LETTERS.map((letter) => (
+          <GroupCard
+            key={letter}
+            letter={letter}
+            teams={window.GROUPS[letter]}
+            ordering={bracket.groups[letter]}
+            nationCode={nationCode}
+            onSet={(o) => onSetGroup(letter, o)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// One compact, reorder-only group ladder. Always shows four seated teams.
+function GroupCard({ letter, teams, ordering, nationCode, onSet }) {
   const [dragFrom, setDragFrom] = useState(null);
   const [dragOver, setDragOver] = useState(null);
 
-  const ord = ordering || [null, null, null, null];
-  const assigned = new Set(ord.filter(Boolean));
-  const filled = ord.filter(Boolean).length;
-  const allDone = filled === 4;
-  const nextOpen = ord.indexOf(null);
-
+  const fifa = teams.slice().sort((a, b) => a.rank - b.rank).map((t) => t.code);
+  const ord = (Array.isArray(ordering) && ordering.length === 4) ? ordering : fifa;
   const teamByCode = (code) => teams.find((t) => t.code === code) || null;
-
-  // last filled index — down-arrow disabled at this position
-  const lastFilledIdx = (() => {
-    let last = 0;
-    ord.forEach((v, i) => { if (v) last = i; });
-    return last;
-  })();
-
-  const seatTeam = (code) => {
-    if (assigned.has(code)) return;
-    const next = ord.slice();
-    const idx = next.findIndex((x) => !x);
-    if (idx === -1) return;
-    next[idx] = code;
-    if (next.filter(Boolean).length === 3) {
-      const leftover = teams.find((t) => !next.includes(t.code));
-      const stillEmpty = next.findIndex((x) => !x);
-      if (leftover && stillEmpty !== -1) next[stillEmpty] = leftover.code;
-    }
-    onSet(next);
-  };
-
-  const clearSlot = (i) => {
-    const next = ord.slice();
-    next[i] = null;
-    onSet(next);
-  };
+  const isFifaOrder = ord.join("|") === fifa.join("|");
 
   const moveSlot = (i, dir) => {
     const j = i + dir;
-    if (j < 0 || j > 3 || !ord[j]) return;
+    if (j < 0 || j > 3) return;
     const next = ord.slice();
     [next[i], next[j]] = [next[j], next[i]];
     onSet(next);
   };
+  const resetFifa = () => onSet(fifa.slice());
 
-  const autoRank = () => {
-    onSet(teams.slice().sort((a, b) => a.rank - b.rank).map((t) => t.code));
-  };
-
-  const clearAll = () => onSet([null, null, null, null]);
-
-  // drag-drop between filled slots
+  // drag-drop reorder (desktop). Touch devices use the ▲▼ controls.
   const onDragStart = (i, e) => {
-    if (!ord[i]) return;
     setDragFrom(i);
     e.dataTransfer.effectAllowed = "move";
     try { e.dataTransfer.setData("text/plain", String(i)); } catch (_) {}
   };
   const onDragOver = (i, e) => {
-    if (dragFrom === null || dragFrom === i || !ord[i]) return;
+    if (dragFrom === null || dragFrom === i) return;
     e.preventDefault();
     if (dragOver !== i) setDragOver(i);
   };
@@ -563,7 +567,7 @@ function GroupBoard({ letter, teams, ordering, nationCode, onSet }) {
     e.preventDefault();
     const from = dragFrom;
     setDragFrom(null); setDragOver(null);
-    if (from === null || from === i || !ord[i]) return;
+    if (from === null || from === i) return;
     const next = ord.slice();
     [next[from], next[i]] = [next[i], next[from]];
     onSet(next);
@@ -571,94 +575,29 @@ function GroupBoard({ letter, teams, ordering, nationCode, onSet }) {
   const onDragEnd = () => { setDragFrom(null); setDragOver(null); };
 
   return (
-    <div className="rtf-group">
-
-      {/* Group header */}
-      <div className="rtf-grouphead">
-        <div className="rtf-gh-l">
-          <h2 className="rtf-subtitle">Group {letter}</h2>
-          <span className="rtf-subcount">{RTF_GROUP_LETTERS.indexOf(letter) + 1} of 12 · {filled}/4 ranked</span>
-        </div>
-        <div className="rtf-gh-r">
-          <button className="btn ghost sm" onClick={autoRank}>Auto-fill</button>
-          <button className="btn ghost sm" onClick={clearAll} disabled={!filled}>Clear</button>
-        </div>
+    <div className="rtf-gcard">
+      <div className="rtf-gcard-head">
+        <h4 className="rtf-gcard-title">Group {letter}</h4>
+        <button
+          className="rtf-gcard-reset"
+          onClick={resetFifa}
+          disabled={isFifaOrder}
+          title="Reset this group to FIFA-rank order"
+        >↻ FIFA</button>
       </div>
 
-      {/* ── Pool (on top) ── */}
-      <div className="rtf-poolwrap">
-        <div className="rtf-poolcue">
-          <span className="rtf-poolcue-n">1</span>
-          <span className="rtf-poolcue-t">
-            {allDone
-              ? <><strong>Group ranked.</strong> Use arrows to reorder.</>
-              : <>Tap a team to seat it — the <strong>last team auto-fills</strong></>}
-          </span>
-        </div>
-        <div className={"rtf-pool-top" + (allDone ? " all-done" : "")}>
-          {teams.map((t) => {
-            const seatIdx = ord.indexOf(t.code);
-            const seated = seatIdx >= 0;
-            const mine = t.code === nationCode;
-            return (
-              <button
-                key={t.code}
-                className={"rtf-pchip" + (seated ? " seated" : "") + (mine ? " mine" : "")}
-                onClick={() => seatTeam(t.code)}
-                disabled={seated}
-              >
-                <span className="rtf-pchip-flag">{t.flag}</span>
-                <span className="rtf-pchip-info">
-                  <b>{t.name}</b>
-                  <span>FIFA #{t.rank}</span>
-                </span>
-                {seated && <span className="rtf-pchip-tag">{RTF_SLOT_META[seatIdx].rank}</span>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Ladder (one solid bordered container) ── */}
-      <div className="rtf-ladder">
-        <div className="rtf-ladder-head">
-          <span className="rtf-ladder-title">Final standings</span>
-          <span className="rtf-ladder-legend">
-            <i><b style={{ background: "var(--lime)" }}></b>Through</i>
-            <i><b style={{ background: "var(--gold)" }}></b>Best-3rd</i>
-            <i><b style={{ background: "rgba(255,255,255,0.3)" }}></b>Out</i>
-          </span>
-        </div>
-
+      <div className="rtf-gcard-ladder">
         {ord.map((code, s) => {
           const m = RTF_SLOT_META[s];
-          const team = code ? teamByCode(code) : null;
-          const mine = team && team.code === nationCode;
-          const isNext = !team && s === nextOpen;
-          const isLast = s === 3;
-
-          if (!team) {
-            return (
-              <div key={s} className={"rtf-lrow empty " + m.cls + (isNext ? " next" : "")}>
-                <span className="rtf-lrow-rail"></span>
-                <div className="rtf-lrow-pos">
-                  <span className="rtf-lrow-medal">{m.medal}</span>
-                  <span className="rtf-lrow-rank">{m.rank}</span>
-                </div>
-                <div className={"rtf-lrow-drop" + (isLast ? " last" : "")}>
-                  {isNext && !isLast && <span className="rtf-drop-arrow">↑</span>}
-                  {isLast ? "Last seat · auto-fills" : "Tap a team above"}
-                </div>
-              </div>
-            );
-          }
-
+          const team = teamByCode(code);
+          if (!team) return null;
+          const mine = team.code === nationCode;
           return (
             <div
-              key={s}
+              key={code}
               className={
-                "rtf-lrow " + m.cls
-                + (mine ? " austria" : "")
+                "rtf-grow " + m.cls
+                + (mine ? " mine" : "")
                 + (dragFrom === s ? " dragging" : "")
                 + (dragOver === s ? " drop-target" : "")
               }
@@ -668,31 +607,20 @@ function GroupBoard({ letter, teams, ordering, nationCode, onSet }) {
               onDrop={(e) => onDrop(s, e)}
               onDragEnd={onDragEnd}
             >
-              <span className="rtf-lrow-rail"></span>
-              <div className="rtf-lrow-pos">
-                <span className="rtf-lrow-medal">{m.medal}</span>
-                <span className="rtf-lrow-rank">{m.rank}</span>
-              </div>
-              <span className="rtf-lrow-flag">{team.flag}</span>
-              <div className="rtf-lrow-info">
-                <b>{team.name}</b>
-                <span>FIFA #{team.rank}</span>
-              </div>
-              <span className={"rtf-lrow-badge " + m.badge}>{m.badgeText}</span>
-              <span className={"rtf-lrow-pts" + (mine ? " x2" : "")}>{mine ? "×2" : "+1"}</span>
-              <div className="rtf-lrow-ctrls">
-                <button className="rtf-iconbtn" onClick={() => moveSlot(s, -1)} disabled={s === 0} aria-label="Move up">▲</button>
-                <button className="rtf-iconbtn" onClick={() => moveSlot(s, 1)} disabled={s === lastFilledIdx} aria-label="Move down">▼</button>
-                <button className="rtf-iconbtn x" onClick={() => clearSlot(s)} aria-label="Remove">✕</button>
-              </div>
-              <span className="rtf-lrow-grip" aria-hidden="true">⠿</span>
+              <span className="rtf-grow-rail" aria-hidden="true"></span>
+              <span className="rtf-grow-pos">{m.rank}</span>
+              <span className="rtf-grow-flag">{team.flag}</span>
+              <span className="rtf-grow-name">{team.name}</span>
+              <span className="rtf-grow-rank">#{team.rank}</span>
+              {mine && <span className="rtf-grow-x2" title="Your nation — points ×2">×2</span>}
+              <span className="rtf-grow-ctrls">
+                <button className="rtf-iconbtn" onClick={() => moveSlot(s, -1)} disabled={s === 0} aria-label={`Move ${team.name} up`}>▲</button>
+                <button className="rtf-iconbtn" onClick={() => moveSlot(s, 1)} disabled={s === 3} aria-label={`Move ${team.name} down`}>▼</button>
+              </span>
+              <span className="rtf-grow-grip" aria-hidden="true">⠿</span>
             </div>
           );
         })}
-      </div>
-
-      <div className="rtf-helpline">
-        <b>Tap</b> to seat · <b>▲▼</b> to reorder · <b>✕</b> to clear<span className="rtf-help-desktop"> · drag on desktop</span>
       </div>
     </div>
   );

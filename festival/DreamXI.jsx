@@ -4,6 +4,7 @@
 // outside the player list scrolls — the whole screen lives inside the shell body.
 
 const POS_LABELS = { ALL: "All", GK: "GK", DF: "DF", MF: "MF", FW: "FW" };
+const POS_FULL = { ALL: "player", GK: "Goalkeeper", DF: "Defender", MF: "Midfielder", FW: "Forward" };
 
 function DreamXI({ state, setState, onNext, onSkip, onBack }) {
   const formation = state.formation || "4-3-3";
@@ -215,9 +216,48 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
   // the user can see what's selected without opening the popover.
   const visibleFormations = pinned.includes(formation) ? pinned : [...pinned, formation];
 
-  // Mobile-only: toggle between player list and pitch views.
-  const [mobileView, setMobileView] = useState("list");
+  // Pitch-first flow: tapping "+" on an empty slot opens the player picker,
+  // pre-filtered to that position. null = closed.
+  const [pickerPos, setPickerPos] = useState(null);
   const [showPoints, setShowPoints] = useState(false);
+
+  const openPicker = (pos) => {
+    setPosFilter(pos && pos !== "ALL" ? pos : suggestedFilter);
+    setQuery("");
+    setPickerPos(pos || "ALL");
+  };
+  const closePicker = () => setPickerPos(null);
+
+  // Add from the overlay. Keep it open so a whole line fills fast: auto-advance
+  // to the next position that still needs players, and close once the XI is full.
+  const pickFromOverlay = (p) => {
+    const wasPicked = picks.includes(p.id);
+    togglePick(p);
+    if (wasPicked) return;                 // a removal — stay put
+    if (picks.length + 1 >= 11) { closePicker(); return; }
+    const active = posFilter;
+    if (active !== "ALL") {
+      const after = (counts[active] || 0) + (p.pos === active ? 1 : 0);
+      if (after >= limits[active]) {
+        const gap = (pos) => limits[pos] - ((counts[pos] || 0) + (pos === p.pos ? 1 : 0));
+        const next = ["GK", "DF", "MF", "FW"].filter((x) => gap(x) > 0).sort((a, b) => gap(b) - gap(a))[0];
+        if (next) setPosFilter(next);
+      }
+    }
+  };
+
+  // Esc closes the picker; lock background scroll while it's open.
+  useEffect(() => {
+    if (!pickerPos) return;
+    const onKey = (e) => { if (e.key === "Escape") closePicker(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [pickerPos]);
 
   return (
     <div className="step-screen">
@@ -289,38 +329,33 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
         </div>
       )}
 
-      <div className="dxi-screen">
-        <header className="dxi-head">
-          <div className="ph-titles">
-            <h2 className="title">Draft your Star XI</h2>
-            <p className="lede">
-              No limits! Just your dream eleven, ranked all summer.
-              Pick a formation, captain a player for ×2 points and rotate the armband each match week, if you want!
-            </p>
-          </div>
-          <div className="dxi-actions">
-            <button className="btn ghost sm dxi-points-btn" onClick={() => setShowPoints(true)}>Points ?</button>
-            <button className="btn ghost sm" onClick={autoFillXI}>Auto-fill XI</button>
-            <button className="btn ghost sm" onClick={clearXI}>Clear</button>
-          </div>
-        </header>
+      {/* ——— Player picker overlay ———
+          Opens when you tap + on an empty slot, pre-filtered to that position.
+          Bottom-sheet on phones, centred dialog on tablet/desktop. */}
+      {pickerPos && (
+        <div className="dxi-picker-backdrop" onClick={closePicker}>
+          <div
+            className="dxi-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-label={posFilter === "ALL" ? "Pick a player" : `Pick a ${POS_FULL[posFilter]}`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="dxi-picker-handle" />
+            <div className="dxi-picker-head">
+              <div className="dxi-picker-titles">
+                <span className="dxi-picker-title">
+                  {posFilter === "ALL" ? "Pick a player" : `Pick a ${POS_FULL[posFilter]}`}
+                </span>
+                <span className="dxi-picker-sub">
+                  {picks.length}/11 picked
+                  {posFilter !== "ALL" ? ` · ${counts[posFilter]}/${limits[posFilter]} ${posFilter}` : ""}
+                </span>
+              </div>
+              <button className="dxi-picker-close" onClick={closePicker} aria-label="Close picker">×</button>
+            </div>
 
-        {/* Single-column view toggle — hidden only on wide two-column layout (≥980px) */}
-        <div className="dxi-mob-tabs" aria-label="View">
-          <button
-            className={"dxi-mob-tab" + (mobileView === "list" ? " sel" : "")}
-            onClick={() => setMobileView("list")}
-          >Players <span className="pct">{picks.length}/11</span></button>
-          <button
-            className={"dxi-mob-tab" + (mobileView === "pitch" ? " sel" : "")}
-            onClick={() => setMobileView("pitch")}
-          >Your XI {picks.length > 0 ? <span className="pct">{picks.length === 11 ? "✓" : picks.length}</span> : null}</button>
-        </div>
-
-        <div className={"dxi-body mob-" + mobileView}>
-          {/* LEFT: position filter + scrollable player list */}
-          <section className="dxi-left">
-            <div className="dxi-controls">
+            <div className="dxi-picker-controls">
               <div className="pos-tabs">
                 {Object.entries(POS_LABELS).map(([k, l]) => {
                   const c = k === "ALL"
@@ -388,7 +423,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
                       (picked ? " picked" : "") +
                       (disabled ? " is-disabled" : "")
                     }
-                    onClick={() => togglePick(p)}
+                    onClick={() => pickFromOverlay(p)}
                     disabled={disabled}
                     title={p.hype ? `${p.name}: ${p.hype}` : p.name}
                   >
@@ -421,10 +456,39 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
                 </div>
               )}
             </div>
-          </section>
 
-          {/* RIGHT: formation + pitch + captain bar */}
-          <aside className="xi-side">
+            <div className="dxi-picker-foot">
+              <span className="dxi-picker-hint">
+                {picks.length >= 11
+                  ? "Your XI is full — tap a shirt to set captains."
+                  : posFilter !== "ALL" && counts[posFilter] >= limits[posFilter]
+                    ? `${POS_FULL[posFilter]} line full — switch position above.`
+                    : "Tap to add. Keep going, or close when you're done."}
+              </span>
+              <button className="btn primary sm dxi-picker-done" onClick={closePicker}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="dxi-screen">
+        <header className="dxi-head">
+          <div className="ph-titles">
+            <h2 className="title">Draft your Star XI</h2>
+            <p className="lede">
+              No limits! Just your dream eleven, ranked all summer.
+              Pick a formation, captain a player for ×2 points and rotate the armband each match week, if you want!
+            </p>
+          </div>
+          <div className="dxi-actions">
+            <button className="btn ghost sm dxi-points-btn" onClick={() => setShowPoints(true)}>Points ?</button>
+            <button className="btn ghost sm" onClick={autoFillXI}>Auto-fill XI</button>
+            <button className="btn ghost sm" onClick={clearXI}>Clear</button>
+          </div>
+        </header>
+
+        <div className="dxi-body">
+          <div className="dxi-stage">
             <div className="formation-row" ref={moreFormRef}>
               <span className="fr-label">Formation</span>
               <div className="formation-tabs">
@@ -476,6 +540,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
               captainByMd={captainByMd}
               onRemove={togglePick}
               onCaptain={setCaptain}
+              onAddSlot={openPicker}
             />
 
             <div className="cap-bar">
@@ -517,7 +582,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
                 in-tournament subs.
               </p>
             </div>
-          </aside>
+          </div>
         </div>
       </div>
 
@@ -538,7 +603,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
 }
 
 // ——— Pitch visualization ———
-function Pitch({ formation, picks, onPicksChange, captain, captainPlus, captainByMd, onRemove, onCaptain, readOnly }) {
+function Pitch({ formation, picks, onPicksChange, captain, captainPlus, captainByMd, onRemove, onCaptain, onAddSlot, readOnly }) {
   const limits = window.FORMATIONS[formation];
   const needsCap = !readOnly && !captainPlus && !captain && picks.length > 0;
   const layout = [
@@ -586,10 +651,24 @@ function Pitch({ formation, picks, onPicksChange, captain, captainPlus, captainB
             {Array.from({ length: n }).map((_, i) => {
               const p = playersByPos[pos][i];
               if (!p) {
+                if (readOnly || !onAddSlot) {
+                  return (
+                    <div key={i} className="pitch-slot empty" title={`${pos} slot`}>
+                      <span className="slot-pos">{pos}</span>
+                    </div>
+                  );
+                }
                 return (
-                  <div key={i} className="pitch-slot empty" title={`${pos} slot: pick from list`}>
+                  <button
+                    key={i}
+                    type="button"
+                    className="pitch-slot empty add"
+                    onClick={() => onAddSlot(pos)}
+                    title={`Add a ${POS_FULL[pos] || pos}`}
+                  >
+                    <span className="slot-add" aria-hidden="true">+</span>
                     <span className="slot-pos">{pos}</span>
-                  </div>
+                  </button>
                 );
               }
               const cap = isCaptain(p.id);
