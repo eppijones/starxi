@@ -7,5 +7,10 @@ node_modules
 # Character source images — all generation dirs excluded, site uses assets/figures-webp/
 carachters/
 
+# Heavy media / social working dirs — generated assets, not served by the site
+backdrops/
+social/
+social-video/
+
 # Backup dirs
 assets/figures-webp.bak/

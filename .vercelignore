@@ -9,6 +9,11 @@ carachters/
 "STAR XI — Brand & Build Book.pdf"
 MATCH_WATCH_REMOVAL.md
 
+# Heavy media / social working dirs — never served to the browser
+backdrops/
+social/
+social-video/
+
 # Config & lock files that aren't served
 skills-lock.json
 .env.example

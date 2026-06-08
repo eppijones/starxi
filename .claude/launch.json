@@ -10,7 +10,7 @@
     {
       "name": "static",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "4323"],
+      "runtimeArgs": ["-c", "from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer; ThreadingHTTPServer(('', 4323), SimpleHTTPRequestHandler).serve_forever()"],
       "port": 4323
     }
   ]
