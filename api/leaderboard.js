@@ -27,6 +27,7 @@ const { verifyRequest } = require("./_lib/auth");
 const { loadGameData } = require("./_lib/gamedata");
 const { assembleLiveSim } = require("../festival/results-map");
 const { tallyUser } = require("../festival/scoring-core");
+const { teamToken } = require("./_lib/tokens");
 
 const ENTRY = (uid) => `wcxi:entry:${uid}`;
 const ROSTER = "wcxi:players";
@@ -121,6 +122,7 @@ function publicRow(r, uid, mode, stage) {
   return {
     rank: r.rank,
     name: r.name,
+    token: teamToken(r.userId), // opaque handle to drill into this team (no uid leak)
     pts: rowBasis(r, mode, stage),
     total,
     predictionPts: r.predictionPts,
