@@ -25,8 +25,8 @@ async function lbCopy(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (e) { return false; }
 }
 
-function LbRow({ row, mode, stage, tied }) {
-  const cls = "league-row" + (row.isYou ? " you" : "");
+function LbRow({ row, mode, stage, tied, onSelect }) {
+  const cls = "league-row" + (row.isYou ? " you" : "") + (onSelect ? " clickable" : "");
   // Resolve the Star XI / Road / nation split for the active stage so the
   // sub-line always reflects what the row is actually ranked on.
   let xi, road, nation;
@@ -57,10 +57,17 @@ function LbRow({ row, mode, stage, tied }) {
   const sub = bits.join(" · ") || (mode === "xionly" ? "Star XI only" : "no picks yet");
   const ultimate = mode === "combined" && stage === "all" && row.rank === 1 && row.xiPts > 0 && row.predictionPts > 0;
   return (
-    <div className={cls}>
+    <div
+      className={cls}
+      onClick={onSelect ? () => onSelect(row) : undefined}
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onKeyDown={onSelect ? (e) => { if (e.key === "Enter") onSelect(row); } : undefined}
+    >
       <span className="rank">{row.rank}</span>
       <span className="nm">
-        {row.isYou ? "You" : row.name}
+        <span className="lb-team-name">{row.name}</span>
+        {row.isYou && <span className="lb-you-badge" title="Your team">★ YOU</span>}
         {ultimate && (
           <span className="lb-crown" title="Ultimate champion: tops the table with a strong XI and Road picks">👑</span>
         )}
@@ -68,6 +75,7 @@ function LbRow({ row, mode, stage, tied }) {
         <small>{sub}</small>
       </span>
       <span className="pts">{row.pts}</span>
+      {onSelect && <span className="lb-row-caret" aria-hidden="true">›</span>}
     </div>
   );
 }
@@ -98,7 +106,119 @@ const LB_STAGES = [
   { key: "knockout", label: "Knockouts" },
 ];
 
-function LbTable({ data, loading, onRefresh, mode, onModeChange, stage, onStageChange, leagueRtfEnabled }) {
+function flagFor(code) {
+  const n = code && window.NATIONS && window.NATIONS.find((x) => x.code === code);
+  return n ? n.flag : "";
+}
+// Compact event string for one matchday cell: "⚽2 🅰1 🧤".
+function evStr(m) {
+  const bits = [];
+  if (m.goals) bits.push("⚽" + (m.goals > 1 ? m.goals : ""));
+  if (m.assists) bits.push("🅰" + (m.assists > 1 ? m.assists : ""));
+  if (m.sheets) bits.push("🧤");
+  return bits.join(" ");
+}
+
+// The leaderboard drill-down: one team's points itemised per player, per matchday
+// (group + knockout), plus the Road-to-the-Final breakdown.
+function TeamDetail({ token, code, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    window.wcxiTeam(token, code).then((r) => { if (alive) { setData(r); setLoading(false); } });
+    return () => { alive = false; };
+  }, [token, code]);
+
+  const d = data;
+  const roadGroupPts = d && d.predictionGroupPts || 0;
+  const roadKoRounds = (d && d.road && d.road.rounds) || [];
+  const perfectGroups = ((d && d.road && d.road.groups) || []).filter((g) => g.perfect).length;
+
+  return (
+    <div className="td-backdrop" onClick={onClose}>
+      <div className="td-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="td-head">
+          <button className="td-close" onClick={onClose} aria-label="Close">×</button>
+          {loading || !d ? (
+            <div className="td-title">Loading team…</div>
+          ) : d.ok === false ? (
+            <div className="td-title">Couldn't load this team.</div>
+          ) : (
+            <>
+              <div className="td-eyebrow">{d.nation ? flagFor(d.nation) + " " + d.nation : "Star XI"}{d.lateEntry ? " · late entry" : ""}</div>
+              <div className="td-title">
+                {d.name}{d.isYou && <span className="lb-you-badge">★ YOU</span>}
+              </div>
+              <div className="td-total"><strong>{d.total}</strong> pts</div>
+              <div className="td-splits">
+                <span><b>{d.xiPts}</b> Star XI</span>
+                <span><b>{d.predictionPts}</b> Road</span>
+                {d.nationBonus > 0 && <span><b>{d.nationBonus}</b> 🏴 nation</span>}
+                {d.bullseyes > 0 && <span><b>{d.bullseyes}</b> ★ perfect</span>}
+              </div>
+            </>
+          )}
+        </div>
+
+        {d && d.ok !== false && !loading && (
+          <div className="td-body">
+            {d.played === 0 && (
+              <div className="td-note">⚽ Scoring opens at kickoff — here's the team that's locked in.</div>
+            )}
+            {(d.orphanPicks || []).length > 0 && (
+              <div className="td-note warn">⚠️ {d.orphanPicks.length} pick(s) left the squad pool and can't score.</div>
+            )}
+
+            <div className="td-section-label">⚽ Star XI — points by matchday</div>
+            <div className="td-xi">
+              {(d.xi || []).map((p) => {
+                const scored = (p.byMd || []).filter((m) => m.pts !== 0 || m.goals || m.assists || m.sheets);
+                return (
+                  <div className={"td-player" + (p.total > 0 ? " has-pts" : "")} key={p.id}>
+                    <span className="td-pos">{p.pos || "—"}</span>
+                    <span className="td-pname">
+                      {p.name || p.id}{p.nat ? " " + flagFor(p.nat) : ""}
+                    </span>
+                    <span className="td-pmds">
+                      {scored.length === 0
+                        ? <span className="td-md-zero">—</span>
+                        : scored.map((m) => (
+                            <span className={"td-md" + (m.isCap ? " cap" : "")} key={m.md} title={m.isCap ? "Captain ×2" : ""}>
+                              <b>{m.label}</b> {evStr(m)} <em>{m.pts > 0 ? "+" + m.pts : m.pts}</em>{m.isCap ? " ©" : ""}
+                            </span>
+                          ))}
+                    </span>
+                    <span className="td-ptotal">{p.total}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="td-section-label">🗺️ Road to the Final</div>
+            <div className="td-road">
+              <div className="td-road-row"><span>Group tables</span><span>{roadGroupPts} pts{perfectGroups ? ` · ${perfectGroups}★ perfect` : ""}</span></div>
+              {["r32", "r16", "qf", "sf", "final"].map((rk) => {
+                const r = roadKoRounds.find((x) => x.round === rk);
+                const lbl = { r32: "Round of 32", r16: "Round of 16", qf: "Quarter-finals", sf: "Semi-finals", final: "Final / Champion" }[rk];
+                return (
+                  <div className="td-road-row" key={rk}>
+                    <span>{lbl}</span>
+                    <span>{r ? `${r.hits}/${r.total} · ${r.points} pts` : "—"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LbTable({ data, loading, onRefresh, mode, onModeChange, stage, onStageChange, leagueRtfEnabled, onSelectTeam }) {
   if (loading && !data) {
     return <div className="empty-state">Loading the table…</div>;
   }
@@ -206,16 +326,21 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, stage, onStageC
               mode={activeMode}
               stage={activeStage}
               tied={i > 0 && top[i - 1].pts === r.pts}
+              onSelect={onSelectTeam}
             />
           ))}
           {/* Pin the player's own row when they're outside the visible top N. */}
           {you && !youInTop && (
             <>
               <div className="lb-gap">⋯</div>
-              <LbRow row={you} mode={activeMode} stage={activeStage} />
+              <LbRow row={you} mode={activeMode} stage={activeStage} onSelect={onSelectTeam} />
             </>
           )}
         </div>
+      )}
+
+      {top.length > 0 && (
+        <p className="lb-tap-hint">Tap any team to see its points, player by player.</p>
       )}
 
       <p className="lb-legend">
@@ -420,6 +545,12 @@ function LbManage({ leagues, onChanged, onCreated, onJoined, onLeft, onClose }) 
     const r = await window.wcxiCreateLeague(name.trim() || "My League");
     setBusy(false);
     if (r && r.ok) { setName(""); setNewCode(r.code); onCreated && onCreated(r.code); }
+    // Leagues are account-only: a guest is nudged to sign up (which auto-claims
+    // their team), then they can come back and create.
+    else if (r && (r.needsAccount || r.error === "needs_account")) {
+      setMsg("Sign up to start a league — your team comes with you.");
+      window.clerkOpenSignUp && window.clerkOpenSignUp();
+    }
     else setMsg("Couldn't create the league. Try again.");
   };
   const join = async () => {
@@ -511,6 +642,7 @@ function Leaderboard({ onEditPicks, onBack }) {
   const [loading, setLoading] = useState(false);
   const [leagues, setLeagues] = useState([]);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState(null); // { token } for the drill-down
   const reqIdRef = useRef(0);
   const joinHandledRef = useRef(false);
 
@@ -673,6 +805,7 @@ function Leaderboard({ onEditPicks, onBack }) {
               stage={lbStage}
               onStageChange={(s) => setLbStage(s)}
               leagueRtfEnabled={activeLeague ? activeLeague.roadToFinalEnabled : true}
+              onSelectTeam={(row) => row && row.token && setSelectedTeam({ token: row.token })}
             />
           )}
         </div>
@@ -682,6 +815,14 @@ function Leaderboard({ onEditPicks, onBack }) {
         <span className="grow"></span>
         <button className="pill ghost sm" onClick={onEditPicks}>Edit my entry</button>
       </div>
+
+      {selectedTeam && (
+        <TeamDetail
+          token={selectedTeam.token}
+          code={scope.kind === "league" ? scope.code : null}
+          onClose={() => setSelectedTeam(null)}
+        />
+      )}
     </div>
   );
 }

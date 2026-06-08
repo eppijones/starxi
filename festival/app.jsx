@@ -13,7 +13,10 @@ const STEPS = [
 // that normalises partial loads back to this layout.
 function emptyBracket() {
   return {
-    groups: {},
+    // Groups are PRE-SEEDED in FIFA-rank order — the player only reorders.
+    // Knockouts + Lucky-8 stay empty; those remain explicit picks.
+    groups: window.rankedGroups(),
+    lucky3rds: [],
     advances: { r32: {}, r16: {}, qf: {}, sf: {}, final: {} },
   };
 }
@@ -34,6 +37,48 @@ const DEFAULT_STATE = {
 
 // Tournament kickoff — Group A opener, Mexico City, Jun 11 2026.
 const KICKOFF = new Date("2026-06-11T16:00:00Z");
+
+// ——— Identity key for the LOCAL draft ———
+// The localStorage draft is stamped with whoever owns it, so one account's team
+// can never be shown — or saved — under a DIFFERENT account on a shared browser.
+//   signed-in Clerk account -> "u:<userId>"
+//   guest session           -> "g:<token>"
+//   nobody yet (anonymous)   -> "anon"
+function starxiIdentityKey(auth) {
+  if (auth && auth.signedIn && auth.user && auth.user.id) return "u:" + auth.user.id;
+  const gt = (typeof window !== "undefined" && window.wcxiGuestToken && window.wcxiGuestToken()) || null;
+  if (gt) return "g:" + gt;
+  return "anon";
+}
+// A brand-new, unshared state object (DEFAULT_STATE's nested bracket must not be reused).
+function freshState() {
+  return { ...DEFAULT_STATE, bracket: emptyBracket() };
+}
+// Resolve a (possibly retired) player id to its current one, so an entry saved
+// before a squad refresh still shows — and scores — the right players.
+function canonPid(id) {
+  return (id != null && typeof window !== "undefined" && window.resolvePid) ? window.resolvePid(id) : id;
+}
+// Map a stored server entry onto our client state shape, canonicalising every
+// player id (picks, captain, per-GW captains, swaps) through the alias map.
+function entryToState(e) {
+  const captainByMd = {};
+  Object.keys(e.captainByMd || {}).forEach((md) => { captainByMd[md] = canonPid(e.captainByMd[md]); });
+  const swaps = (e.swaps || []).map((sw) => ({ ...sw, from: canonPid(sw.from), to: canonPid(sw.to) }));
+  return {
+    nation: e.nation != null ? e.nation : null,
+    bracket: e.bracket || emptyBracket(),
+    picks: (e.picks || []).map(canonPid),
+    formation: e.formation || "4-3-3",
+    captain: e.captain != null ? canonPid(e.captain) : null,
+    captainPlus: !!e.captainPlus,
+    captainByMd: captainByMd,
+    swaps: swaps,
+    teamName: e.displayName || "",
+    submitted: true,
+    submittedAt: e.submittedAt || Date.now(),
+  };
+}
 
 // ——— Helpers used by the redesigned summary screen ———
 // Order picks into formation slots GK → DF → MF → FW so the numbered "Starting
@@ -412,7 +457,8 @@ function LeaguesPreview({ auth, onLeaderboard }) {
             >
               <div className="lr-rank">{r.rank}</div>
               <div className="lr-nm">
-                {r.isYou ? "You" : r.name}
+                {r.name}
+                {r.isYou && <span className="lb-you-badge">★ YOU</span>}
                 <small>
                   {r.predictionPts ? `+${r.predictionPts} Road` : "Star XI only"}
                   {r.bullseyes ? ` · ${r.bullseyes} perfect` : ""}
@@ -447,8 +493,11 @@ function LeaguesPreview({ auth, onLeaderboard }) {
 // shareable Starting XI card (the social-media keepsake), a Live Center with
 // running scores + tournament status, and a Leagues preview pulling from the
 // /api leaderboards. The expandable LockedBracket review sits below.
-function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
+function TournamentLive({ state, onEditPicks, onLeaderboard, onMatchCentre, onHistory }) {
   const auth = useClerkAuth();
+  // A guest is signed-out but holds a recovery-code session. They can re-view their
+  // code or upgrade to a full account (which unlocks creating leagues + email recovery).
+  const isGuest = !auth.signedIn && !!(window.wcxiGuestToken && window.wcxiGuestToken());
   const nation = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
   const bracket = state.bracket || { groups: {}, advances: { r32:{}, r16:{}, qf:{}, sf:{}, final:{} } };
   const picks = state.picks || [];
@@ -660,6 +709,12 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
               liveSim={liveSim}
             />
             <LeaguesPreview auth={auth} onLeaderboard={onLeaderboard} />
+            {/* Match Centre — all World Cup fixtures + live scores */}
+            <button className="road-opener mc-opener" onClick={onMatchCentre}>
+              <span className="ro-chev">📅</span>
+              <span className="ro-title">Match Centre</span>
+              <span className="ro-meta">All fixtures · kickoff times · live scores</span>
+            </button>
             {/* Road to the Final — opens as a full-screen modal */}
             <button className="road-opener" onClick={() => setRoadOpen(true)}>
               <span className="ro-chev">▸</span>
@@ -703,6 +758,20 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onHistory }) {
           onClick={onHistory}
           title="World Cup history & records"
         >📖 History</button>
+        {isGuest && (
+          <React.Fragment>
+            <button
+              className="pill ghost sm"
+              onClick={() => window.starxiShowGuestCode && window.starxiShowGuestCode()}
+              title="Show the code that gets you back to this team"
+            >🎟️ My code</button>
+            <button
+              className="pill ghost sm"
+              onClick={() => window.clerkOpenSignUp && window.clerkOpenSignUp()}
+              title="Add an email account — enables private leagues + recovery"
+            >＋ Add account</button>
+          </React.Fragment>
+        )}
       </div>
 
       {/* Share/download status — lives outside the .xishare card so it's never
@@ -950,6 +1019,87 @@ function matchWatchEnabled() {
   }
 }
 
+// ——— Guest code: reveal (after lock-in) + restore (returning on a new device) ———
+// Shown once, right after a guest locks in: the recovery code to save. It's the
+// only key back to their team, so we make saving it feel important without blocking
+// the player from LIVE (the modal sits over the already-loaded LIVE screen).
+function GuestCodeReveal({ code, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    try {
+      navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch (e) {}
+  };
+  return (
+    <div className="guest-modal" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="guest-card" onClick={(e) => e.stopPropagation()}>
+        <div className="guest-card-emoji">🎟️</div>
+        <h3 className="guest-card-title">You're in — save your code</h3>
+        <p className="guest-card-lede">
+          This is the key to your team on any other device or browser. We can't recover
+          it for you, so keep it somewhere safe.
+        </p>
+        <button className="guest-code" onClick={copy} title="Tap to copy">
+          <span className="guest-code-text">{code}</span>
+          <span className="guest-code-copy">{copied ? "✓ copied" : "tap to copy"}</span>
+        </button>
+        <p className="guest-card-foot">
+          Want email recovery + private leagues? You can add an account anytime.
+        </p>
+        <button className="pill primary guest-card-done" onClick={onClose}>
+          Saved it — take me to Live →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// "I have a code" — restore a guest team after clearing storage or on a new device.
+function GuestRestore({ onClose, onRestored }) {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const fmt = (v) => (window.wcxiFormatGuestCode ? window.wcxiFormatGuestCode(v) : v);
+  const go = async () => {
+    const clean = fmt(code).replace(/[^A-Z0-9]/gi, "");
+    if (clean.length < 12) { setErr("That code looks too short."); return; }
+    setBusy(true); setErr(null);
+    const res = window.wcxiGuestRedeem ? await window.wcxiGuestRedeem(code) : { ok: false };
+    setBusy(false);
+    if (!res.ok) {
+      setErr(res.error === "no_such_code" ? "No team found for that code." : "Couldn't restore — check the code and try again.");
+      return;
+    }
+    onRestored && onRestored();
+  };
+  return (
+    <div className="guest-modal" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="guest-card" onClick={(e) => e.stopPropagation()}>
+        <div className="guest-card-emoji">🔑</div>
+        <h3 className="guest-card-title">Restore your team</h3>
+        <p className="guest-card-lede">Enter the code you saved when you locked in.</p>
+        <input
+          className="lb-input guest-restore-input"
+          value={code}
+          onChange={(e) => { setCode(fmt(e.target.value)); if (err) setErr(null); }}
+          onKeyDown={(e) => { if (e.key === "Enter") go(); }}
+          placeholder="7K3P-9QX2-T8MZ"
+          maxLength={16}
+          autoFocus
+          aria-label="Recovery code"
+        />
+        {err && <p className="guest-restore-err">{err}</p>}
+        <div className="guest-card-actions">
+          <button className="pill ghost sm" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="pill primary" onClick={go} disabled={busy}>{busy ? "Restoring…" : "Restore →"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const initial = window.loadState();
   const watchOn = matchWatchEnabled();
@@ -962,57 +1112,143 @@ function App() {
   const [step, setStep] = useState(
     pendingJoin ? "leaderboard" : watchOn ? "matchwatch" : savedStep
   );
+  // Which identity the local draft belongs to (stamped into localStorage). null
+  // for legacy/anonymous drafts; the reconcile effect below resolves it once auth
+  // loads and guarantees a draft is never shown/saved under the wrong account.
+  const ownerRef = useRef(initial && initial.owner != null ? initial.owner : null);
 
+  // Primary persistence: write the whole draft (nation, XI, Road picks, team
+  // name, current step) to localStorage on every change — always stamped with the
+  // current owner so a later sign-in/out can tell whose draft this is.
   useEffect(() => {
-    window.saveState({ state, step });
+    window.saveState({ state, step, owner: ownerRef.current });
   }, [state, step]);
+
+  // Belt-and-suspenders flush. Mobile browsers frequently freeze or kill a
+  // backgrounded tab (app switch, incoming call, back-swipe) WITHOUT giving
+  // React's effects a chance to run, so we also snapshot the freshest draft the
+  // instant the page is hidden or torn down. `latestRef` keeps these one-time
+  // listeners pinned to the current state without re-binding on every change.
+  // We use pagehide + visibilitychange (not beforeunload, which is unreliable on
+  // mobile and disables the browser's back/forward cache) — these are the events
+  // that actually fire when a phone backgrounds or discards the tab.
+  const latestRef = useRef({ state, step });
+  latestRef.current = { state, step };
+  useEffect(() => {
+    const flush = () => window.saveState({ ...latestRef.current, owner: ownerRef.current });
+    const onVisibility = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   const goTo = (id) => {
     setStep(id);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // ——— Auth-gated lock-in ———
-  // Players build their whole entry anonymously; we only require a Clerk
-  // sign-in at the "Lock in" moment, then persist the entry server-side.
+  // ——— Lock-in (guest-first: no sign-up wall) ———
+  // Players build their whole entry anonymously. At lock-in we DON'T force an
+  // account: a brand-new player is minted a guest identity + a recovery code and
+  // taken straight to LIVE. Signing up with email stays available (and is required
+  // to create a league); a guest who later signs in is auto-claimed (merged).
   const auth = useClerkAuth();
   const pendingSubmit = useRef(false);
-  const doSubmit = () => {
-    setState(s => {
-      const next = { ...s, submitted: true, submittedAt: s.submittedAt || Date.now() };
-      // displayName: prefer the squad name the player typed, fall back to Clerk identity.
-      const displayName = (s.teamName && s.teamName.trim()) || auth.displayName || null;
-      if (window.wcxiSaveEntry) {
-        Promise.resolve().then(() => window.wcxiSaveEntry(next, displayName));
-      }
-      return next;
-    });
-    goTo("live");
+  const [guestReveal, setGuestReveal] = useState(null);  // recovery code to show once
+  const [restoreOpen, setRestoreOpen] = useState(false); // "I have a code" modal
+
+  // Persist the entry server-side. authedFetch attaches whichever identity exists
+  // (Clerk JWT, else the guest token), so this works for both kinds of player.
+  const persistEntry = (st) => {
+    const displayName = (st.teamName && st.teamName.trim()) || auth.displayName || null;
+    if (window.wcxiSaveEntry) Promise.resolve().then(() => window.wcxiSaveEntry(st, displayName));
   };
+  // Mark submitted + jump to LIVE. localStorage is the source of truth, so LIVE
+  // renders instantly regardless of network. Returns the snapshot for persisting.
+  const lockInLocally = () => {
+    const next = { ...state, submitted: true, submittedAt: state.submittedAt || Date.now() };
+    setState(next);
+    goTo("live");
+    return next;
+  };
+  // Used once a Clerk flow completes (deferred submit) — see the effect below.
+  const doSubmit = () => { persistEntry(lockInLocally()); };
+
+  // Primary CTA: lock in & go live, no sign-up.
   const submit = () => {
-    if (!auth.signedIn) {
-      pendingSubmit.current = true;
-      // Open sign-up: this is the registration moment. Clerk's modal
-      // lets existing users switch to sign-in from within the same flow.
-      window.clerkOpenSignUp ? window.clerkOpenSignUp() : window.clerkOpenSignIn();
+    // Already identified (a Clerk account, or a returning guest who has a code):
+    // just lock in and persist under that identity.
+    if (auth.signedIn || (window.wcxiGuestToken && window.wcxiGuestToken())) {
+      persistEntry(lockInLocally());
       return;
     }
-    doSubmit();
+    // Brand-new player: go LIVE now, mint a guest code in the background, then
+    // persist under the guest session and reveal the code for them to save.
+    const snap = lockInLocally();
+    if (window.wcxiGuestMint) {
+      window.wcxiGuestMint().then((res) => {
+        if (res && res.ok) {
+          persistEntry(snap);
+          if (res.code) setGuestReveal(res.code);
+        }
+      });
+    }
   };
-  // Finish a deferred lock-in once the player completes the Clerk flow.
-  // Also: if the user signs in and already has a locally-submitted entry,
-  // navigate to live immediately (handles sign-out → sign-in on same device).
+  // Secondary CTA: make it a real account now (also the path to creating leagues).
+  const submitWithAccount = () => {
+    if (auth.signedIn) { doSubmit(); return; }
+    pendingSubmit.current = true;
+    window.clerkOpenSignUp ? window.clerkOpenSignUp() : window.clerkOpenSignIn();
+  };
+  // Finish a deferred lock-in once the player completes the Clerk flow (build a
+  // team anonymously → "Sign up & lock in" → persist under the new account).
+  // Landing on LIVE for an already-submitted entry is handled by the identity
+  // reconcile below, so it stays correct across account switches.
   useEffect(() => {
     if (!auth.signedIn) return;
     if (pendingSubmit.current) {
       pendingSubmit.current = false;
       doSubmit();
-      return;
-    }
-    if (state.submitted) {
-      goTo("live");
     }
   }, [auth.signedIn]);
+
+  // ——— Auto-claim: a guest who signs up/in gets their data merged ———
+  // Moves the guest's entry, roster slot and league memberships onto the Clerk
+  // account, then clears the guest session. Runs once per sign-in.
+  const claimedRef = useRef(false);
+  useEffect(() => {
+    if (!auth.signedIn || claimedRef.current) return;
+    if (!(window.wcxiGuestToken && window.wcxiGuestToken())) return;
+    claimedRef.current = true;
+    if (window.wcxiGuestClaim) window.wcxiGuestClaim();
+  }, [auth.signedIn]);
+
+  // Let any "Sign in" surface offer "…or restore with a code".
+  useEffect(() => {
+    window.starxiOpenRestore = () => setRestoreOpen(true);
+    window.starxiShowGuestCode = () => {
+      const c = window.wcxiGuestCode && window.wcxiGuestCode();
+      if (c) setGuestReveal(c);
+    };
+    return () => {
+      try { delete window.starxiOpenRestore; delete window.starxiShowGuestCode; } catch (e) {}
+    };
+  }, []);
+
+  // After a code restores a team, pull the entry back and drop into LIVE.
+  const onRestored = () => {
+    setRestoreOpen(false);
+    if (!window.wcxiLoadEntry) return;
+    window.wcxiLoadEntry().then((res) => {
+      const e = res && res.entry;
+      if (!e) { goTo("live"); return; }
+      setState(entryToState(e)); // canonicalises retired pick ids via the alias map
+      goTo("live");
+    });
+  };
 
   // ——— Sign-out redirect ———
   // When the user signs out, return them to the landing screen.
@@ -1025,42 +1261,47 @@ function App() {
     wasSignedIn.current = auth.signedIn;
   }, [auth.loaded, auth.signedIn]);
 
-  // ——— Cross-device hydrate ———
-  // When a returning player signs in on a fresh device (no local draft yet),
-  // pull their locked entry back from the server so it follows them everywhere.
-  // We never clobber in-progress local work — only hydrate when local is empty.
-  const hydratedRef = useRef(false);
+  // ——— Identity reconcile (the cross-account safety net) ———
+  // Once Clerk resolves (and on every account switch), make sure the local draft
+  // actually belongs to the CURRENT identity. The localStorage draft is shared by
+  // every account on this browser, so without this a team built/locked by account
+  // A would still be on screen — and could be saved — after signing in as B.
+  //
+  //   • owner matches            → it's theirs, keep the fast local copy.
+  //   • this identity has a server entry → that's authoritative, load it.
+  //   • anon/guest draft + new account with no entry → ADOPT it (new sign-up
+  //     carry-over, or a guest→account claim still settling).
+  //   • a DIFFERENT account's draft (or a signed-out leftover) → WIPE it.
+  const idKey = starxiIdentityKey(auth);
+  const reconciledRef = useRef(null);
   useEffect(() => {
-    if (!auth.loaded || !auth.signedIn || hydratedRef.current) return;
-    if (!window.wcxiLoadEntry) return;
-    hydratedRef.current = true;
+    if (!auth.loaded) return;
+    if (reconciledRef.current === idKey) return; // already reconciled this identity
+    reconciledRef.current = idKey;
+
+    const localOwner = ownerRef.current || "anon"; // legacy/untagged drafts = anon
+    if (localOwner === idKey) { ownerRef.current = idKey; return; } // already theirs
+    if (!window.wcxiLoadEntry || !window.starxiReconcileAction) { ownerRef.current = idKey; return; }
+
     window.wcxiLoadEntry().then((res) => {
       const e = res && res.entry;
-      if (!e) return;
-      // Don't clobber local work: only hydrate when there's no local draft and
-      // nothing has been locked in locally yet.
-      if (state.submitted) return;
-      const localHasProgress = !!(
-        state.nation ||
-        (state.picks && state.picks.length) ||
-        (state.bracket && state.bracket.groups && Object.keys(state.bracket.groups).length)
-      );
-      if (localHasProgress) return;
-      setState({
-        nation: e.nation != null ? e.nation : null,
-        bracket: e.bracket || emptyBracket(),
-        picks: e.picks || [],
-        formation: e.formation || "4-3-3",
-        captain: e.captain != null ? e.captain : null,
-        captainPlus: !!e.captainPlus,
-        captainByMd: e.captainByMd || {},
-        swaps: e.swaps || [],
-        submitted: true,
-        submittedAt: e.submittedAt || Date.now(),
-      });
-      goTo("live");
+      const action = window.starxiReconcileAction(localOwner, idKey, !!e);
+      if (action === "load") {                  // this identity's server entry is authoritative
+        setState(entryToState(e));
+        ownerRef.current = idKey;
+        goTo("live");
+      } else if (action === "adopt") {          // carry an anon/guest draft onto the account
+        ownerRef.current = idKey;
+        window.saveState({ state: latestRef.current.state, step: latestRef.current.step, owner: idKey });
+      } else if (action === "wipe") {           // a DIFFERENT account's draft — never show/save it
+        setState(freshState());
+        ownerRef.current = idKey;
+        goTo("welcome");
+      } else {                                   // "keep"
+        ownerRef.current = idKey;
+      }
     });
-  }, [auth.loaded, auth.signedIn]);
+  }, [auth.loaded, idKey]);
   const reset = () => {
     if (!confirm("Start over? This wipes your nation, Road picks and Star XI.")) return;
     // Re-build a fresh state object (don't reuse DEFAULT_STATE — its nested
@@ -1086,6 +1327,8 @@ function App() {
       style={nationColor ? { "--nation": nationColor } : undefined}
     >
       <MusicPlayer step={step} />
+      {guestReveal && <GuestCodeReveal code={guestReveal} onClose={() => setGuestReveal(null)} />}
+      {restoreOpen && <GuestRestore onClose={() => setRestoreOpen(false)} onRestored={onRestored} />}
       {step === "welcome" ? (
         <Welcome
           state={state} setState={setState}
@@ -1110,19 +1353,23 @@ function App() {
           )}
           {step === "confirm" && (
             <Confirm state={state} setState={setState}
-              onSubmit={submit} onBack={() => goTo("predict")}
+              onSubmit={submit} onSignUp={submitWithAccount} onBack={() => goTo("predict")}
               signedIn={auth.signedIn} />
           )}
           {step === "live" && (
             <TournamentLive state={state}
               onEditPicks={() => goTo("dreamxi")}
               onLeaderboard={() => goTo("leaderboard")}
+              onMatchCentre={() => goTo("matchcentre")}
               onHistory={() => goTo("history")} />
           )}
           {step === "leaderboard" && (
             <Leaderboard
               onEditPicks={() => goTo("dreamxi")}
               onBack={() => goTo(state.submitted ? "live" : "welcome")} />
+          )}
+          {step === "matchcentre" && (
+            <MatchCentre onBack={() => goTo(state.submitted ? "live" : "welcome")} />
           )}
           {step === "history" && (
             <History onBack={() => goTo(state.submitted ? "live" : "welcome")} />
