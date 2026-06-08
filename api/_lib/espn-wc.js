@@ -162,4 +162,58 @@ async function worldCupStats(opts) {
   };
 }
 
-module.exports = { worldCupStats, parseGoal, summaryRows, ESPN_BASE };
+// ——— Fixtures + scores from ESPN, normalised to the football-data shape ———
+// football-data's free tier rate-limits Vercel's shared IPs (returns 0 matches),
+// so /api/results falls back to ESPN's fifa.world scoreboard. ESPN gives teams,
+// scores, status and the stage (season.slug); we recover group + matchday by
+// matching the team pair to our own FIXTURES. Output is a drop-in for everything
+// downstream (buildResultsMap / deriveActualBracket / Match Centre).
+const ESPN_STAGE = {
+  "group-stage": "GROUP_STAGE", "round-of-32": "LAST_32", "round-of-16": "LAST_16",
+  "quarterfinals": "QUARTER_FINALS", "semifinals": "SEMI_FINALS", "3rd-place-match": "THIRD_PLACE", "final": "FINAL",
+};
+const ESPN_STATE = { pre: "TIMED", in: "IN_PLAY", post: "FINISHED" };
+const TLA_TO_FD = { URU: "URY" }; // football-data convention the pipeline expects
+const ourCodeFromTla = (t) => (t === "URY" ? "URU" : t);
+
+async function worldCupResults(FIXTURES) {
+  const sb = await fetchJson(`${ESPN_BASE}/scoreboard?dates=${WC_FROM}-${WC_TO}&limit=300`, 8000);
+  if (!sb || !Array.isArray(sb.events) || !sb.events.length) return null;
+
+  const byPair = new Map();
+  (FIXTURES || []).forEach((f) => byPair.set([f.home.code, f.away.code].sort().join("-"), f));
+
+  let played = 0;
+  const matches = sb.events.map((e) => {
+    const c = (e.competitions || [])[0] || {};
+    const state = (c.status && c.status.type && c.status.type.state) || "pre";
+    const status = ESPN_STATE[state] || "TIMED";
+    const comp = c.competitors || [];
+    const H = comp.find((x) => x.homeAway === "home") || comp[0] || {};
+    const A = comp.find((x) => x.homeAway === "away") || comp[1] || {};
+    const htla = (H.team && H.team.abbreviation) || null;
+    const atla = (A.team && A.team.abbreviation) || null;
+    const fd = (t) => (t ? (TLA_TO_FD[t] || t) : null);
+    const stage = ESPN_STAGE[e.season && e.season.slug] || "GROUP_STAGE";
+
+    let group = null, matchday = null;
+    if (stage === "GROUP_STAGE" && htla && atla) {
+      const f = byPair.get([ourCodeFromTla(htla), ourCodeFromTla(atla)].sort().join("-"));
+      if (f) { group = f.group; matchday = f.matchday; }
+    }
+    const scored = state === "in" || state === "post";
+    const hs = scored ? parseInt(H.score, 10) : null;
+    const as = scored ? parseInt(A.score, 10) : null;
+    if (status === "FINISHED") played++;
+    const winner = H.winner ? "HOME_TEAM" : A.winner ? "AWAY_TEAM" : (state === "post" ? "DRAW" : null);
+    return {
+      id: e.id, utcDate: e.date, status, stage, group, matchday,
+      home: { tla: fd(htla), name: (H.team && H.team.displayName) || null },
+      away: { tla: fd(atla), name: (A.team && A.team.displayName) || null },
+      score: { home: Number.isFinite(hs) ? hs : null, away: Number.isFinite(as) ? as : null, winner, duration: "REGULAR" },
+    };
+  });
+  return { configured: true, source: "espn", throttled: false, updatedAt: new Date().toISOString(), count: matches.length, played, matches };
+}
+
+module.exports = { worldCupStats, worldCupResults, parseGoal, summaryRows, ESPN_BASE };
