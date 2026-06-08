@@ -1,6 +1,6 @@
 // STAR XI '26 — Screen 4: Confirm + scoring explainer
 
-function Confirm({ state, setState, onSubmit, onBack, signedIn }) {
+function Confirm({ state, setState, onSubmit, onSignUp, onBack, signedIn }) {
   const teamName = state.teamName || "";
   const setTeamName = (val) => setState(s => ({ ...s, teamName: val }));
   const [nameError, setNameError] = React.useState(false);
@@ -8,6 +8,11 @@ function Confirm({ state, setState, onSubmit, onBack, signedIn }) {
   function handleSubmit() {
     if (!canSubmit) { setNameError(true); return; }
     onSubmit();
+  }
+  // Secondary path: skip the guest code and create a real account up front.
+  function handleSignUp() {
+    if (!canSubmit) { setNameError(true); return; }
+    onSignUp && onSignUp();
   }
   const nation = state.nation ? window.NATIONS.find(n => n.code === state.nation) : null;
   const bracket = state.bracket || { groups: {}, advances: {} };
@@ -169,7 +174,7 @@ function Confirm({ state, setState, onSubmit, onBack, signedIn }) {
           className={`lb-input confirm-name-input${nameError && !canSubmit ? " input-error" : ""}`}
           type="text"
           maxLength={40}
-          placeholder="Name your squad (e.g. Route One Merchants)"
+          placeholder="Name your squad (e.g. Shooting Stars XI)"
           value={teamName}
           onChange={e => { setTeamName(e.target.value); if (nameError) setNameError(false); }}
           aria-label="Squad name"
@@ -180,8 +185,21 @@ function Confirm({ state, setState, onSubmit, onBack, signedIn }) {
       </div>
       <div className="step-foot">
         <button className="pill ghost sm" onClick={onBack}>← Back</button>
-        <span className="foot-note">{signedIn ? "Once you submit, you're in for the summer." : "Sign up to lock in — your picks are already saved."}</span>
-        <button className="pill primary" onClick={handleSubmit} disabled={false}>{signedIn ? "✓ Submit — lock in" : "✓ Sign up & lock in"} <span>→</span></button>
+        <span className="foot-note">
+          {signedIn
+            ? "Once you submit, you're in for the summer."
+            : "No sign-up needed — you'll get a code to save your team."}
+        </span>
+        <div className="confirm-foot-cta">
+          <button className="pill primary" onClick={handleSubmit} disabled={false}>
+            {signedIn ? "✓ Submit — lock in" : "✓ Lock in & go live"} <span>→</span>
+          </button>
+          {!signedIn && (
+            <button type="button" className="confirm-foot-alt" onClick={handleSignUp}>
+              or sign up with email
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

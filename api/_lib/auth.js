@@ -1,17 +1,21 @@
-// WORLD CUP XI — server-side Clerk session verification.
+// WORLD CUP XI — server-side session verification (Clerk accounts + guest codes).
 //
-// The browser sends a short-lived Clerk session JWT as `Authorization: Bearer …`
-// (see festival/api.js -> clerkGetToken). We verify it here so a player can only
-// ever read/write their OWN entry — the userId comes from the signed token, never
-// from the request body.
+// The browser sends `Authorization: Bearer …` (see festival/api.js -> authedFetch).
+// Two kinds of bearer are accepted; either way the userId comes from the signed
+// token, never from the request body, so a player can only ever touch their OWN data:
 //
-// Verification uses @clerk/backend's verifyToken:
-//   • CLERK_JWT_KEY  -> networkless (PEM public key; fastest, no JWKS fetch)
-//   • CLERK_SECRET_KEY -> networked JWKS (works out of the box with the key you
-//                         already have; the JWKS is cached between invocations)
-// We prefer the networkless key when present and fall back to the secret key.
+//   • Guest session token  gt_<…>  — HMAC-signed by us; verified networklessly
+//     (no Clerk, no KV). Yields { userId:"g_…", guest:true }. See ./guest.js.
+//   • Clerk session JWT            — verified with @clerk/backend's verifyToken:
+//       · CLERK_JWT_KEY  -> networkless (PEM public key; fastest, no JWKS fetch)
+//       · CLERK_SECRET_KEY -> networked JWKS (cached between invocations)
+//     Yields { userId:"user_…", claims }.
+//
+// Guest tokens are tried first (cheap prefix check) so a guest never hits Clerk's
+// verifier. Endpoints that must be account-only check `auth.guest`.
 
 const { verifyToken } = require("@clerk/backend");
+const { verifyGuestToken } = require("./guest");
 
 function bearer(req) {
   const h =
@@ -21,10 +25,14 @@ function bearer(req) {
   return m ? m[1].trim() : null;
 }
 
-// Returns { userId, claims } for a valid token, or null otherwise.
+// Returns { userId, claims } (Clerk) or { userId, guest:true } (guest) for a valid
+// token, or null otherwise.
 async function verifyRequest(req) {
   const token = bearer(req);
   if (!token) return null;
+
+  // Guest session tokens carry a gt_ prefix and verify locally — no Clerk round-trip.
+  if (token.slice(0, 3) === "gt_") return verifyGuestToken(token);
 
   const jwtKey = process.env.CLERK_JWT_KEY;
   const secretKey = process.env.CLERK_SECRET_KEY;

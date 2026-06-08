@@ -193,6 +193,9 @@ module.exports = async (req, res) => {
     const action = body.action;
 
     if (action === "create") {
+      // Leagues are the "serious" layer — only real accounts can own one. A guest
+      // must claim their team (sign up) first; joining a league stays open to all.
+      if (auth.guest) return json(res, 403, { ok: false, error: "needs_account", needsAccount: true });
       const meta = await createLeague(uid, body.name);
       return json(res, 200, {
         ok: true,
