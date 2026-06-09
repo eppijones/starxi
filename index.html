@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <!-- Root the document base URL. Deep links like /join/CODE are rewritten to
+       this file (see vercel.json), so without this the browser resolves every
+       relative asset (styles.css, favicons, manifest) against /join/ and 404s
+       them — the page renders completely unstyled. Every asset in this app is
+       root-relative by design, so pinning <base> to "/" is the correct invariant
+       and fixes the head <link>s that load before the join script tidies the URL. -->
+  <base href="/" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>STAR XI World Cup 2026</title>
   <meta name="description" content="STAR XI — an independent, fan-made prediction + Star XI squad game for the summer of '26. Pick your nation, draft your XI, call every score. Not affiliated with, endorsed by, or licensed by FIFA." />
