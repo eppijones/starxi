@@ -132,8 +132,19 @@
       </div>
     </div>
 
+    <div class="cols" style="margin-top:16px">
+      <div class="card">
+        <h2>Match results <span id="matchesCount"></span></h2>
+        <div class="list" id="matches"></div>
+      </div>
+      <div class="card">
+        <h2>Top performers <span id="scorersCount"></span></h2>
+        <div class="list" id="performers"></div>
+      </div>
+    </div>
+
     <div class="note">
-      Auto-refreshing every 12s · "Online now" = sessions active in the last 5 min · Richer geo/device analytics live in your Vercel dashboard.
+      Auto-refreshing every 12s · "Online now" = sessions active in the last 5 min · Match results &amp; top scorers go live at kickoff · Richer geo/device analytics live in your Vercel dashboard.
     </div>
   </div>
 
@@ -175,13 +186,14 @@
     }
 
     function render(d) {
-      var a = d.activity || {}, t = d.teams || {}, lg = d.leagues || {}, c = d.connections || {}, rs = d.results || {};
+      var a = d.activity || {}, t = d.teams || {}, lg = d.leagues || {}, c = d.connections || {}, rs = d.results || {}, sc = d.scoring || {}, pl = d.players || {};
       // tiles
       $("tiles").innerHTML =
         tile("Online now", num(a.onlineNow), "active in last 5 min", true) +
         tile("Registered users", num(c.clerkUsers), "Clerk accounts") +
         tile("Teams locked in", num(t.count), (t.today != null ? "+" + t.today + " in last 24h" : "")) +
         tile("Leagues", num(lg.count), "private mini-leagues") +
+        tile("Matches played", num(sc.matchesPlayed), "of 104 fixtures") +
         tile("Total visits", num(a.totalVisits), "all-time page loads");
       // connections
       var feedSub = rs.error ? "error" : ((rs.source || "—") + (rs.throttled ? " · throttled" : "") + (rs.updatedAt ? " · " + ago(Date.parse(rs.updatedAt)) : ""));
@@ -203,8 +215,22 @@
         return '<div class="row"><div><div class="nm">' + esc(x.name) + '</div><div class="meta">code ' + esc(x.code) + '</div></div><div class="rt">' + x.members + ' member' + (x.members === 1 ? '' : 's') + '</div></div>';
       }).join("") : '<div class="empty">No leagues created yet.</div>';
 
+      // ── live scoring (populates once matches kick off) ──
+      $("matchesCount").textContent = sc.matchesPlayed ? sc.matchesPlayed + " played" : "";
+      var rm = sc.recentMatches || [];
+      $("matches").innerHTML = rm.length ? rm.map(function (m) {
+        var score = (m.hs != null && m.as != null) ? (m.hs + " – " + m.as) : "v";
+        return '<div class="row"><div class="nm">' + esc(m.home) + ' <span style="color:var(--lime)">' + score + '</span> ' + esc(m.away) + '</div><div class="rt">' + esc(stageLabel(m.stage)) + '</div></div>';
+      }).join("") : '<div class="empty">⚽ Scoring goes live at kickoff (Jun 11) — finished match scores appear here.</div>';
+      $("scorersCount").textContent = pl.scorers ? pl.scorers + " scorers" : "";
+      var tp = pl.top || [];
+      $("performers").innerHTML = tp.length ? tp.map(function (p) {
+        return '<div class="row"><div><div class="nm">' + esc(p.name) + '</div><div class="meta">' + esc(p.tla) + '</div></div><div class="rt">' + (p.goals ? "⚽ " + p.goals : "") + (p.assists ? "&nbsp;&nbsp;🅰 " + p.assists : "") + '</div></div>';
+      }).join("") : '<div class="empty">No goals yet — top scorers &amp; assisters will list here.</div>';
+
       lastAt = Date.now();
     }
+    function stageLabel(s) { return ({ GROUP_STAGE: "Group", LAST_32: "R32", LAST_16: "R16", QUARTER_FINALS: "QF", SEMI_FINALS: "SF", THIRD_PLACE: "3rd", FINAL: "Final" })[s] || ""; }
 
     async function load() {
       try {

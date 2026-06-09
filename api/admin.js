@@ -99,10 +99,11 @@ module.exports = async (req, res) => {
       if (r.ok) { const j = await r.json(); if (j && typeof j.total_count === "number") out.connections.clerkUsers = j.total_count; }
     }
   } catch (e) {}
-  // Live results feed health (internal call).
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  const proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
+
+  // Live results feed health + finished-match scores (internal call).
   try {
-    const host = req.headers["x-forwarded-host"] || req.headers.host;
-    const proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
     const rr = await fetch(`${proto}://${host}/api/results`);
     if (rr.ok) {
       const j = await rr.json();
@@ -114,8 +115,35 @@ module.exports = async (req, res) => {
         throttled: !!j.throttled,
         updatedAt: j.updatedAt || null,
       };
+      const done = (j.matches || []).filter((m) => m.status === "FINISHED" || (m.score && m.score.home != null));
+      done.sort((a, b) => new Date(b.utcDate || 0) - new Date(a.utcDate || 0));
+      out.scoring = {
+        matchesPlayed: j.played || done.length,
+        recentMatches: done.slice(0, 16).map((m) => ({
+          home: (m.home && (m.home.tla || m.home.name)) || "?",
+          away: (m.away && (m.away.tla || m.away.name)) || "?",
+          hs: m.score ? m.score.home : null,
+          as: m.score ? m.score.away : null,
+          stage: m.stage || null,
+          utcDate: m.utcDate || null,
+        })),
+      };
     } else { out.results = { error: "HTTP " + rr.status }; }
   } catch (e) { out.results = { error: "unreachable" }; }
+
+  // Player scoring — goals + assists are what drive Star XI points.
+  try {
+    const pr = await fetch(`${proto}://${host}/api/player-stats`);
+    if (pr.ok) {
+      const j = await pr.json();
+      const stats = (j.stats || []).filter((s) => (s.goals || 0) + (s.assists || 0) > 0);
+      stats.sort((a, b) => (b.goals || 0) - (a.goals || 0) || (b.assists || 0) - (a.assists || 0));
+      out.players = {
+        scorers: stats.length,
+        top: stats.slice(0, 25).map((s) => ({ name: s.playerName || "?", tla: s.teamTla || "", goals: s.goals || 0, assists: s.assists || 0 })),
+      };
+    }
+  } catch (e) {}
 
   return json(res, 200, out);
 };
