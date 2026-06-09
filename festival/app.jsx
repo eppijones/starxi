@@ -1019,7 +1019,10 @@ function App() {
   const watchOn = matchWatchEnabled();
   const [state, setState] = useState({ ...DEFAULT_STATE, ...(initial?.state || {}) });
   const RESTORABLE = ["welcome", "dreamxi", "predict", "confirm", "live"];
-  const savedStep = RESTORABLE.includes(initial?.step) ? initial.step : "welcome";
+  let savedStep = RESTORABLE.includes(initial?.step) ? initial.step : "welcome";
+  // A returning player who has already locked in a team lands straight on LIVE,
+  // not the welcome carousel. Mid-edit steps (predict/confirm/…) are preserved.
+  if (savedStep === "welcome" && initial && initial.state && initial.state.submitted) savedStep = "live";
   // A league invite deep link (starxi.io/join/CODE) lands straight on the
   // leaderboard so the invite + auto-join flow is the first thing they see.
   const pendingJoin = typeof window !== "undefined" && !!window.__STARXI_JOIN;
@@ -1140,7 +1143,13 @@ function App() {
     const myGen = ++reconcileGenRef.current;
 
     const localOwner = ownerRef.current || "anon"; // legacy/untagged drafts = anon
-    if (localOwner === idKey) { ownerRef.current = idKey; return; } // already theirs
+    if (localOwner === idKey) { // already theirs — trust the local copy
+      ownerRef.current = idKey;
+      // …but a returning, signed-in player with a locked-in team should see LIVE,
+      // not be left sitting on the welcome carousel.
+      if (latestRef.current && latestRef.current.state && latestRef.current.state.submitted && latestRef.current.step === "welcome") goTo("live");
+      return;
+    }
     if (!window.wcxiLoadEntry || !window.starxiReconcileAction) { ownerRef.current = idKey; return; }
 
     window.wcxiLoadEntry().then((res) => {
