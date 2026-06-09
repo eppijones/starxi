@@ -38,6 +38,9 @@ const META = (code) => `wcxi:league:${code}`;
 const MEMBERS = (code) => `wcxi:league:${code}:m`;
 const USER_LEAGUES = (uid) => `wcxi:user:${uid}:leagues`;
 const ENTRY = (uid) => `wcxi:entry:${uid}`;
+// Global index of every league code — lets the admin dashboard enumerate leagues
+// (regular users still only ever see their own via USER_LEAGUES).
+const LEAGUES_ALL = "wcxi:leagues:all";
 
 // Opaque, stable handle for a member within a league (never the raw userId).
 function memberToken(uid, code) {
@@ -131,6 +134,7 @@ async function createLeague(uid, name) {
   await kvSet(META(code), JSON.stringify(meta));
   await kvSadd(MEMBERS(code), uid);
   await kvSadd(USER_LEAGUES(uid), code);
+  await kvSadd(LEAGUES_ALL, code);
   return meta;
 }
 
@@ -287,6 +291,7 @@ module.exports = async (req, res) => {
       for (const u of uids) await kvSrem(USER_LEAGUES(u), code);
       await kvDel(MEMBERS(code));
       await kvDel(META(code));
+      await kvSrem(LEAGUES_ALL, code);
       return json(res, 200, { ok: true, code, deleted: true });
     }
 

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>STAR XI · Admin</title>
+  <link rel="icon" type="image/svg+xml" href="brand/star-xi-favicon.svg?v=20260609-mark2" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --lime: #C6F24E; --gold: #E9C45A; --red: #ff6a6a;
+      --ink: #08130d; --panel: #0e1f17; --panel2: #0b1a12;
+      --line: rgba(255,255,255,.10); --line2: rgba(255,255,255,.16);
+      --txt: #fff; --dim: rgba(255,255,255,.58); --dim2: rgba(255,255,255,.40);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif; color: var(--txt);
+      background:
+        radial-gradient(120% 80% at 50% -10%, rgba(198,242,78,.07) 0%, transparent 55%),
+        linear-gradient(180deg, #0a160f 0%, #07110b 100%);
+      min-height: 100dvh; -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 22px 18px 60px; }
+    .anton { font-family: Anton, sans-serif; font-weight: 400; letter-spacing: .01em; }
+
+    /* ── login ── */
+    .login { min-height: 100dvh; display: grid; place-items: center; padding: 20px; }
+    .login-card {
+      width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--line2);
+      border-radius: 20px; padding: 30px 26px; box-shadow: 0 24px 70px rgba(0,0,0,.5);
+    }
+    .login-mark { font-family: Anton, sans-serif; font-size: 13px; letter-spacing: .26em; color: var(--lime); text-transform: uppercase; }
+    .login-h { font-family: Anton, sans-serif; font-size: 34px; text-transform: uppercase; margin: 4px 0 2px; }
+    .login-sub { font-size: 12.5px; color: var(--dim); margin-bottom: 20px; }
+    .fld { display: block; margin-bottom: 12px; }
+    .fld label { display: block; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim2); margin-bottom: 6px; font-weight: 700; }
+    .fld input {
+      width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line2);
+      background: rgba(255,255,255,.06); color: #fff; font-size: 15px; font-family: inherit;
+    }
+    .fld input:focus { outline: none; border-color: var(--lime); }
+    .btn {
+      width: 100%; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
+      background: var(--lime); color: #08130d; font-weight: 800; font-size: 14px;
+      letter-spacing: .03em; text-transform: uppercase; font-family: inherit;
+    }
+    .btn:disabled { opacity: .55; cursor: default; }
+    .err { color: var(--red); font-size: 12.5px; margin-top: 12px; min-height: 16px; }
+
+    /* ── dashboard ── */
+    .top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+    .brand { font-family: Anton, sans-serif; font-size: 26px; text-transform: uppercase; letter-spacing: .02em; }
+    .brand b { color: var(--lime); }
+    .grow { flex: 1; }
+    .live { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--dim); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 0 rgba(198,242,78,.6); animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(198,242,78,.5);} 70%{ box-shadow: 0 0 0 8px rgba(198,242,78,0);} 100%{ box-shadow:0 0 0 0 rgba(198,242,78,0);} }
+    .ghost { background: rgba(255,255,255,.07); color: #fff; border: 1px solid var(--line2); border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .ghost:hover { background: rgba(255,255,255,.13); }
+
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px 16px 14px; }
+    .tile.accent { border-color: rgba(198,242,78,.4); background: linear-gradient(180deg, rgba(198,242,78,.08), rgba(198,242,78,0)); }
+    .tile .k { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim2); font-weight: 700; }
+    .tile .v { font-family: Anton, sans-serif; font-size: 40px; line-height: 1; margin-top: 8px; }
+    .tile.accent .v { color: var(--lime); }
+    .tile .s { font-size: 11px; color: var(--dim); margin-top: 6px; }
+
+    .conns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .chip { display: inline-flex; align-items: center; gap: 7px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; font-size: 12.5px; }
+    .chip .cdot { width: 8px; height: 8px; border-radius: 50%; }
+    .ok { background: var(--lime); } .bad { background: var(--red); } .warnc { background: var(--gold); }
+    .chip small { color: var(--dim); }
+
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+    .card h2 { font-family: Anton, sans-serif; font-weight: 400; font-size: 15px; letter-spacing: .05em; text-transform: uppercase; margin: 0; padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; }
+    .card h2 span { font-family: Inter; font-size: 12px; color: var(--lime); font-weight: 800; }
+    .row { display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-top: 1px solid rgba(255,255,255,.06); }
+    .row:first-of-type { border-top: 0; }
+    .row .nm { font-weight: 700; font-size: 13.5px; }
+    .row .meta { font-size: 11px; color: var(--dim2); }
+    .row .rt { margin-left: auto; font-size: 11.5px; color: var(--dim); text-align: right; white-space: nowrap; }
+    .tag { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--gold); border: 1px solid rgba(233,196,90,.4); border-radius: 6px; padding: 1px 5px; }
+    .empty { padding: 20px 16px; color: var(--dim2); font-size: 12.5px; text-align: center; }
+    .list { max-height: 460px; overflow-y: auto; }
+    .note { font-size: 11px; color: var(--dim2); margin-top: 18px; text-align: center; line-height: 1.5; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="login" class="login">
+    <form class="login-card" id="loginForm">
+      <div class="login-mark">✦ STAR XI</div>
+      <div class="login-h">Admin</div>
+      <div class="login-sub">Monitoring dashboard — owner access only.</div>
+      <div class="fld"><label>Username</label><input id="user" value="admin" autocomplete="username" /></div>
+      <div class="fld"><label>Password</label><input id="pass" type="password" autocomplete="current-password" placeholder="••••••••••••" /></div>
+      <button class="btn" id="loginBtn" type="submit">Enter</button>
+      <div class="err" id="loginErr"></div>
+    </form>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dash" class="wrap hidden">
+    <div class="top">
+      <div class="brand">STAR&nbsp;XI <b>ADMIN</b></div>
+      <div class="grow"></div>
+      <span class="live"><span class="dot"></span><span id="updated">live</span></span>
+      <button class="ghost" id="refreshBtn">↻ Refresh</button>
+      <button class="ghost" id="logoutBtn">Log out</button>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+    <div class="conns" id="conns"></div>
+
+    <div class="cols">
+      <div class="card">
+        <h2>Recent sign-ups <span id="teamsCount"></span></h2>
+        <div class="list" id="teams"></div>
+      </div>
+      <div class="card">
+        <h2>Leagues <span id="leaguesCount"></span></h2>
+        <div class="list" id="leagues"></div>
+      </div>
+    </div>
+
+    <div class="note">
+      Auto-refreshing every 12s · "Online now" = sessions active in the last 5 min · Richer geo/device analytics live in your Vercel dashboard.
+    </div>
+  </div>
+
+  <script>
+    var KEY = "starxi_admin_pw";
+    var pw = sessionStorage.getItem(KEY) || "";
+    var timer = null, lastAt = 0, agoTimer = null;
+
+    var $ = function (id) { return document.getElementById(id); };
+    function show(view) {
+      $("login").classList.toggle("hidden", view !== "login");
+      $("dash").classList.toggle("hidden", view !== "dash");
+    }
+    function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
+    function ago(ts) {
+      if (!ts) return "—";
+      var s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+      if (s < 60) return s + "s ago";
+      var m = Math.floor(s / 60); if (m < 60) return m + "m ago";
+      var h = Math.floor(m / 60); if (h < 24) return h + "h ago";
+      return Math.floor(h / 24) + "d ago";
+    }
+    function num(n) { return (n == null) ? "—" : Number(n).toLocaleString(); }
+
+    async function fetchData() {
+      var r = await fetch("/api/admin", { headers: { Authorization: "Bearer " + pw }, cache: "no-store" });
+      if (r.status === 401) { var e = new Error("unauthorized"); e.code = 401; throw e; }
+      if (r.status === 503) { var e2 = new Error("not_configured"); e2.code = 503; throw e2; }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }
+
+    function tile(k, v, s, accent) {
+      return '<div class="tile' + (accent ? ' accent' : '') + '"><div class="k">' + k + '</div><div class="v">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+    }
+    function chip(label, state, sub) {
+      var cls = state === true ? "ok" : state === false ? "bad" : "warnc";
+      return '<span class="chip"><span class="cdot ' + cls + '"></span>' + esc(label) + (sub ? ' <small>' + esc(sub) + '</small>' : '') + '</span>';
+    }
+
+    function render(d) {
+      var a = d.activity || {}, t = d.teams || {}, lg = d.leagues || {}, c = d.connections || {}, rs = d.results || {};
+      // tiles
+      $("tiles").innerHTML =
+        tile("Online now", num(a.onlineNow), "active in last 5 min", true) +
+        tile("Registered users", num(c.clerkUsers), "Clerk accounts") +
+        tile("Teams locked in", num(t.count), (t.today != null ? "+" + t.today + " in last 24h" : "")) +
+        tile("Leagues", num(lg.count), "private mini-leagues") +
+        tile("Total visits", num(a.totalVisits), "all-time page loads");
+      // connections
+      var feedSub = rs.error ? "error" : ((rs.source || "—") + (rs.throttled ? " · throttled" : "") + (rs.updatedAt ? " · " + ago(Date.parse(rs.updatedAt)) : ""));
+      $("conns").innerHTML =
+        chip("KV / Upstash", d.kv === true) +
+        chip("Clerk auth", c.clerk, c.clerkUsers != null ? c.clerkUsers + " users" : "") +
+        chip("football-data", c.footballData) +
+        chip("Results feed", rs.error ? false : (rs.configured ? true : null), feedSub);
+      // teams
+      $("teamsCount").textContent = t.count != null ? t.count + " total" : "";
+      var recent = t.recent || [];
+      $("teams").innerHTML = recent.length ? recent.map(function (x) {
+        return '<div class="row"><div><div class="nm">' + esc(x.name) + (x.lateEntry ? ' <span class="tag">late</span>' : '') + '</div><div class="meta">' + esc(x.nation) + '</div></div><div class="rt">' + ago(x.submittedAt) + '</div></div>';
+      }).join("") : '<div class="empty">No teams locked in yet.</div>';
+      // leagues
+      $("leaguesCount").textContent = lg.count != null ? lg.count + " total" : "";
+      var list = lg.list || [];
+      $("leagues").innerHTML = list.length ? list.map(function (x) {
+        return '<div class="row"><div><div class="nm">' + esc(x.name) + '</div><div class="meta">code ' + esc(x.code) + '</div></div><div class="rt">' + x.members + ' member' + (x.members === 1 ? '' : 's') + '</div></div>';
+      }).join("") : '<div class="empty">No leagues created yet.</div>';
+
+      lastAt = Date.now();
+    }
+
+    async function load() {
+      try {
+        var d = await fetchData();
+        render(d);
+      } catch (e) {
+        if (e.code === 401) { sessionStorage.removeItem(KEY); pw = ""; stop(); show("login"); $("loginErr").textContent = "Wrong password."; }
+        else if (e.code === 503) { stop(); show("login"); $("loginErr").textContent = "Admin not configured — set ADMIN_PASSWORD in Vercel."; }
+        else { $("updated").textContent = "connection error — retrying"; }
+      }
+    }
+    function tickAgo() { if (lastAt) $("updated").textContent = "updated " + ago(lastAt); }
+    function start() {
+      show("dash"); load();
+      timer = setInterval(load, 12000);
+      agoTimer = setInterval(tickAgo, 1000);
+    }
+    function stop() { clearInterval(timer); clearInterval(agoTimer); timer = agoTimer = null; }
+
+    $("loginForm").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      pw = $("pass").value || "";
+      $("loginErr").textContent = "";
+      if (!pw) { $("loginErr").textContent = "Enter the password."; return; }
+      sessionStorage.setItem(KEY, pw);
+      start();
+    });
+    $("refreshBtn").addEventListener("click", load);
+    $("logoutBtn").addEventListener("click", function () { stop(); sessionStorage.removeItem(KEY); pw = ""; show("login"); $("pass").value = ""; });
+
+    if (pw) start(); else show("login");
+  </script>
+</body>
+</html>

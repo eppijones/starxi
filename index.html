@@ -178,5 +178,27 @@
        harmless 404 until then. Static-site (non-framework) script form. -->
   <script defer src="/_vercel/speed-insights/script.js"></script>
   <script defer src="/_vercel/insights/script.js"></script>
+
+  <!-- Lightweight, fail-silent usage ping → powers the owner's /admin "online now"
+       + visit counters. Never blocks or errors the page. -->
+  <script>
+    (function () {
+      try {
+        var sid = localStorage.getItem("starxi_sid");
+        if (!sid) { sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem("starxi_sid", sid); }
+        var ping = function (isBeat) {
+          try {
+            fetch("/api/track" + (isBeat ? "?beat=1" : ""), {
+              method: "POST", keepalive: true,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sid: sid }),
+            }).catch(function () {});
+          } catch (e) {}
+        };
+        ping(false);
+        setInterval(function () { if (document.visibilityState === "visible") ping(true); }, 60000);
+      } catch (e) {}
+    })();
+  </script>
 </body>
 </html>
