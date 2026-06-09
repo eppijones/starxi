@@ -27,17 +27,40 @@ function kvConfigured() {
 }
 
 // Send a single Redis command (array form) to the Upstash REST root endpoint.
-async function redis(command) {
+//
+// Retries transient failures (rate-limit 429, upstream 5xx, network blip) with a
+// short backoff before giving up — so a launch-day traffic burst against Upstash
+// degrades gracefully instead of surfacing as 500s. Safe because every command we
+// send is idempotent (GET/SMEMBERS read-only; SET/SADD/SREM/DEL converge to the
+// same state on a repeat), so a re-sent write can never corrupt data.
+async function redis(command, _attempt = 0) {
   const { url, token } = kvConfig();
   if (!url || !token) throw new Error("KV not configured");
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(command),
-  });
+
+  let r;
+  try {
+    r = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(command),
+    });
+  } catch (netErr) {
+    if (_attempt < 2) {
+      await new Promise((res) => setTimeout(res, 150 * (_attempt + 1)));
+      return redis(command, _attempt + 1);
+    }
+    throw netErr;
+  }
+
+  // Transient: rate-limited or upstream hiccup → brief backoff, then retry.
+  if ((r.status === 429 || r.status >= 500) && _attempt < 2) {
+    await new Promise((res) => setTimeout(res, 150 * (_attempt + 1)));
+    return redis(command, _attempt + 1);
+  }
+
   if (!r.ok) throw new Error(`KV HTTP ${r.status}`);
   const j = await r.json();
   if (j && j.error) throw new Error(`KV: ${j.error}`);
