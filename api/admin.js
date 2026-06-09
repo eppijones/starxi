@@ -13,6 +13,9 @@ const META = (c) => `wcxi:league:${c}`;
 const MEMBERS = (c) => `wcxi:league:${c}:m`;
 const VISITS = "wcxi:stats:visits";
 const PRESENCE = "wcxi:presence";
+const UNIQUE_IPS = "wcxi:stats:ips";
+const UNIQUE_IPS_DAY = (d) => `wcxi:stats:ips:${d}`;
+const utcDay = (now) => new Date(now).toISOString().slice(0, 10).replace(/-/g, "");
 
 function json(res, code, body) {
   res.statusCode = code;
@@ -80,7 +83,9 @@ module.exports = async (req, res) => {
   try {
     const visits = parseInt(await redis(["GET", VISITS]), 10) || 0;
     const online = parseInt(await redis(["ZCOUNT", PRESENCE, String(now - 5 * 60 * 1000), "+inf"]), 10) || 0;
-    out.activity = { totalVisits: visits, onlineNow: online };
+    const uniqueVisitors = parseInt(await redis(["SCARD", UNIQUE_IPS]), 10) || 0;
+    const uniqueToday = parseInt(await redis(["SCARD", UNIQUE_IPS_DAY(utcDay(now))]), 10) || 0;
+    out.activity = { totalVisits: visits, onlineNow: online, uniqueVisitors, uniqueToday };
   } catch (e) { out.activity = { error: String((e && e.message) || e) }; }
 
   // ── Data connections ──

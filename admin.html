@@ -144,7 +144,7 @@
     </div>
 
     <div class="note">
-      Auto-refreshing every 12s · "Online now" = sessions active in the last 5 min · Match results &amp; top scorers go live at kickoff · Richer geo/device analytics live in your Vercel dashboard.
+      Auto-refreshing every 12s · "Online now" = sessions active in the last 5 min · "Unique visitors" = distinct IP addresses (hashed for privacy) — one device/network = one visitor · "Total visits" counts every page load · Match results &amp; top scorers go live at kickoff · Richer geo/device analytics live in your Vercel dashboard.
     </div>
   </div>
 
@@ -190,6 +190,7 @@
       // tiles
       $("tiles").innerHTML =
         tile("Online now", num(a.onlineNow), "active in last 5 min", true) +
+        tile("Unique visitors", num(a.uniqueVisitors), (a.uniqueToday != null ? "+" + a.uniqueToday + " today · distinct IPs" : "distinct IPs"), true) +
         tile("Registered users", num(c.clerkUsers), "Clerk accounts") +
         tile("Teams locked in", num(t.count), (t.today != null ? "+" + t.today + " in last 24h" : "")) +
         tile("Leagues", num(lg.count), "private mini-leagues") +
