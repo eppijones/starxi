@@ -119,6 +119,11 @@ function evStr(m) {
   return bits.join(" ");
 }
 
+// Drill-down list order: keeper → defence → midfield → attack (matches the
+// numbered Starting XI card). Unknown positions sink to the bottom.
+const TD_POS_RANK = { GK: 0, DF: 1, MF: 2, FW: 3 };
+function tdPosRank(pos) { const r = TD_POS_RANK[pos]; return r == null ? 9 : r; }
+
 // The leaderboard drill-down: one team's points itemised per player, per matchday
 // (group + knockout), plus the Road-to-the-Final breakdown.
 function TeamDetail({ token, code, onClose }) {
@@ -177,7 +182,7 @@ function TeamDetail({ token, code, onClose }) {
 
             <div className="td-section-label">⚽ Star XI — points by matchday</div>
             <div className="td-xi">
-              {(d.xi || []).map((p) => {
+              {(d.xi || []).slice().sort((a, b) => tdPosRank(a.pos) - tdPosRank(b.pos)).map((p) => {
                 const scored = (p.byMd || []).filter((m) => m.pts !== 0 || m.goals || m.assists || m.sheets);
                 return (
                   <div className={"td-player" + (p.total > 0 ? " has-pts" : "")} key={p.id}>

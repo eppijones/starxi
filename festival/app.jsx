@@ -651,16 +651,25 @@ function TournamentLive({ state, onEditPicks, onLeaderboard, onMatchCentre, onHi
         }
       }
 
-      // 2) Download the PNG — desktop, Mac, Android Chrome.
+      // 2) Fallback when the native share sheet isn't available. On touch
+      //    devices the <a download> attribute is frequently ignored (notably
+      //    iOS Safari), so open the PNG in a new tab — the user presses and
+      //    holds to "Save to Photos". Desktop keeps the clean file download.
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setShareMsg({ type: "ok", text: "Saved! Check your downloads." });
+      const isTouch = (navigator.maxTouchPoints || 0) > 1 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || "");
+      if (isTouch) {
+        window.open(url, "_blank");
+        setShareMsg({ type: "ok", text: "Image ready — press and hold it to save to your photos." });
+      } else {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setShareMsg({ type: "ok", text: "Saved! Check your downloads." });
+      }
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e) {
       console.warn("Share image failed:", e);
