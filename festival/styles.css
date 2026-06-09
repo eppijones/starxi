@@ -2493,7 +2493,7 @@ h3.subtitle {
 /* utility cluster — right shoulder */
 .shell-topright {
   position: fixed; top: 18px; right: 14px; z-index: 60;
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 7px;
 }
 .shell-util {
   appearance: none; cursor: pointer;
@@ -2732,7 +2732,22 @@ input[type=range].mp-range::-moz-range-thumb {
    the portaled shell-util buttons participate directly in the topright flexbox,
    forming row 2 of the icon grid (music · mute) — the SAME placement on tablets
    as on phones: tucked under Sign-in / Reset, never the bottom corner. */
-.shell-mp-slot { display: none; }
+/* On WEB the music + mute buttons sit on their own row directly beneath the
+   Leaderboard / profile / reset cluster — width:100% forces the wrap — so the
+   player lives in the top-right corner just like on mobile & tablet, never the
+   bottom corner. (:empty collapses the row before the buttons portal in.) The
+   tablet/mobile block below switches the slot to display:contents for the grid. */
+.shell-mp-slot {
+  display: flex; width: 100%; justify-content: flex-end; gap: 7px; margin-top: 7px;
+}
+.shell-mp-slot:empty { display: none; }
+/* With the buttons living in the top-right slot, hide the floating bottom-right
+   pair and dock the "Now playing" popover just under the cluster. */
+.mp-root.mp-has-slot > div:last-child { display: none !important; }
+.mp-root.mp-has-slot {
+  top: 92px !important; right: 14px !important; bottom: auto !important;
+  flex-direction: column !important; align-items: flex-end !important;
+}
 @media (max-width: 1024px), (pointer: coarse) and (max-width: 1366px) {
   .shell-mp-slot { display: contents; }
   /* With the buttons living in the slot, hide the standalone bottom row and
@@ -5186,8 +5201,10 @@ input[type=range].mp-range::-moz-range-thumb {
 /* ——— Unified "How Points Work" bottom-sheet ——— */
 .pts-sheet-backdrop {
   position: fixed; inset: 0; z-index: 200;
-  background: rgba(0,0,0,.45);
-  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  /* No page-dimming scrim — same treatment as the player picker: a clean floating
+     panel, with a transparent backdrop kept only to catch outside-clicks for close
+     and block interaction with the page behind. No grey/blur wash over the site. */
+  background: transparent;
   display: flex; align-items: flex-end; justify-content: center;
   animation: fadeIn .18s ease both;
 }
