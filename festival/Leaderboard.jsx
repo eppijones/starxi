@@ -271,12 +271,6 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, stage, onStageC
         <span>
           <strong>{data.total}</strong> {data.total === 1 ? "player" : "players"}
         </span>
-        <span className="lb-dot">·</span>
-        <span>
-          {played > 0
-            ? <><strong>{played}</strong> matches played</>
-            : "no matches played yet"}
-        </span>
         <button className="lb-refresh" onClick={onRefresh} title="Refresh">↻</button>
       </div>
 
