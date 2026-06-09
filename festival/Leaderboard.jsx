@@ -286,20 +286,6 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, stage, onStageC
         ))}
       </div>
 
-      {activeStage === "knockout" && (
-        <div className="lb-stage-note">
-          🏟️ Scores from the Round of 32 onward — so anyone who joined mid-tournament competes here on a level field.
-        </div>
-      )}
-
-      {/* Nudge: you have no Road-to-Final picks but others might */}
-      {you && you.predictionPts === 0 && activeMode !== "xionly" && !rtfLocked && (
-        <div className="lb-rtf-nudge">
-          <span className="lb-rtf-nudge-icon">🗺️</span>
-          <span>Fill in your <strong>Road to the Final</strong> picks to score bonus points and compete fully.</span>
-        </div>
-      )}
-
       {top.length === 0 ? (
         <div className="empty-state">
           No entries here yet. Be the first to lock one in.
@@ -326,14 +312,6 @@ function LbTable({ data, loading, onRefresh, mode, onModeChange, stage, onStageC
         </div>
       )}
 
-      {top.length > 0 && (
-        <p className="lb-tap-hint">Tap any team to see its points, player by player.</p>
-      )}
-
-      <p className="lb-legend">
-        Total = your <strong>Star XI</strong> + <strong>Road to the Final</strong> bonuses.
-        {" "}<span className="lb-legend-tie">Ties break on perfect calls (★), then who locked in first.</span>
-      </p>
     </div>
   );
 }
