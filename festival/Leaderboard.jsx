@@ -436,6 +436,7 @@ function LbLeagueCard({ league, onChanged, onLeft }) {
               onClick={() => copy("code2", league.code)}
             >{copied === "code2" ? "✓ Code copied" : "📋 Copy code"}</button>
           </div>
+          <div className="lb-invite-hint">🔗 Anyone who opens the link joins automatically — no code to type.</div>
 
           {solo && (
             <div className="lb-invite-cta">
@@ -622,6 +623,7 @@ function Leaderboard({ onEditPicks, onBack, embedded }) {
   const [leagues, setLeagues] = useState([]);
   const [codeCopied, setCodeCopied] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState(null); // { token } for the drill-down
+  const [joinNotice, setJoinNotice] = useState(null);      // arrived-via-invite-link result banner
   const reqIdRef = useRef(0);
   const joinHandledRef = useRef(false);
 
@@ -648,7 +650,12 @@ function Leaderboard({ onEditPicks, onBack, embedded }) {
     (async () => {
       const r = await window.wcxiJoinLeague(pending);
       await refreshLeagues();
-      if (r && r.ok) setScope({ kind: "league", code: r.code });
+      if (r && r.ok) {
+        setScope({ kind: "league", code: r.code });
+        setJoinNotice({ ok: true, name: r.name || "your league" });
+      } else {
+        setJoinNotice({ ok: false, code: pending });
+      }
     })();
   }, [auth.signedIn, refreshLeagues]);
 
@@ -753,6 +760,18 @@ function Leaderboard({ onEditPicks, onBack, embedded }) {
               </button>
             )}
           </div>
+
+          {/* Arrived via an invite link → tell them what happened. */}
+          {joinNotice && (
+            <div className={"lb-join-notice" + (joinNotice.ok ? " ok" : " err")}>
+              <span>
+                {joinNotice.ok
+                  ? <>🎉 You're in <strong>{joinNotice.name}</strong> — you've joined via the invite link.</>
+                  : <>Couldn't join automatically. That link/code (<strong>{joinNotice.code}</strong>) may be invalid — try the join box under ＋ League.</>}
+              </span>
+              <button className="lb-join-notice-x" onClick={() => setJoinNotice(null)} aria-label="Dismiss">×</button>
+            </div>
+          )}
 
           {/* Signed-out: the global table is public; nudge them to claim a rank. */}
           {!auth.signedIn && (

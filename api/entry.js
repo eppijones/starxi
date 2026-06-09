@@ -205,6 +205,14 @@ module.exports = async (req, res) => {
 
     const merged = applyLock(existing, incoming, now);
 
+    // Server-side completeness guard: the UI gates the happy path, but a malformed
+    // or direct API call must never land an incomplete team on the leaderboard.
+    // Validate the MERGED record (a post-kickoff tactical-only save keeps the
+    // existing 11 picks + nation, so it still passes).
+    if (!merged.nation || !Array.isArray(merged.picks) || merged.picks.length !== 11) {
+      return json(res, 400, { ok: false, error: "incomplete_entry", message: "Lock-in needs a nation and exactly 11 players." });
+    }
+
     const displayName =
       (body.displayName && String(body.displayName).slice(0, 60)) ||
       (existing && existing.displayName) ||

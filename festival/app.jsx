@@ -1119,16 +1119,23 @@ function App() {
   //   • a DIFFERENT account's draft (or a signed-out leftover) → WIPE it.
   const idKey = starxiIdentityKey(auth);
   const reconciledRef = useRef(null);
+  // Monotonic generation: each reconcile run claims a number; a slow wcxiLoadEntry()
+  // that resolves after the identity has changed (fast sign-out→sign-in on a shared
+  // device) is now stale and bails, so it can never load one account's team into
+  // another's live session.
+  const reconcileGenRef = useRef(0);
   useEffect(() => {
     if (!auth.loaded) return;
     if (reconciledRef.current === idKey) return; // already reconciled this identity
     reconciledRef.current = idKey;
+    const myGen = ++reconcileGenRef.current;
 
     const localOwner = ownerRef.current || "anon"; // legacy/untagged drafts = anon
     if (localOwner === idKey) { ownerRef.current = idKey; return; } // already theirs
     if (!window.wcxiLoadEntry || !window.starxiReconcileAction) { ownerRef.current = idKey; return; }
 
     window.wcxiLoadEntry().then((res) => {
+      if (myGen !== reconcileGenRef.current) return; // a newer identity superseded this load
       const e = res && res.entry;
       const action = window.starxiReconcileAction(localOwner, idKey, !!e);
       if (action === "load") {                  // this identity's server entry is authoritative

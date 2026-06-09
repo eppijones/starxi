@@ -184,7 +184,16 @@
       var code = null;
       if (w === "HOME_TEAM") code = m.home && m.home.tla;
       else if (w === "AWAY_TEAM") code = m.away && m.away.tla;
-      if (!code) return;
+      if (!code) {
+        // A finished KO match with no resolved winner shouldn't happen (ties go to
+        // penalties) — if it does, the feed is lagging. Don't guess; log it loudly
+        // so a stuck bracket is diagnosable instead of silently mis-scored.
+        if (typeof console !== "undefined" && console.warn) {
+          console.warn("[results-map] finished " + round + " match has no winner yet — not advancing:",
+            (m.home && m.home.tla) || "?", "v", (m.away && m.away.tla) || "?");
+        }
+        return;
+      }
       code = ourCode(code);
       var slot = Object.keys(bracket.advances[round]).length;
       bracket.advances[round][slot] = code;

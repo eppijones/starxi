@@ -205,7 +205,12 @@ async function worldCupResults(FIXTURES) {
     const hs = scored ? parseInt(H.score, 10) : null;
     const as = scored ? parseInt(A.score, 10) : null;
     if (status === "FINISHED") played++;
-    const winner = H.winner ? "HOME_TEAM" : A.winner ? "AWAY_TEAM" : (state === "post" ? "DRAW" : null);
+    // A draw is only a real outcome in the group stage. Knockout ties are settled
+    // by ET/penalties, so a finished KO match must carry a real winner — if ESPN
+    // hasn't flagged one yet, leave it null (unresolved) rather than faking a DRAW,
+    // which would otherwise advance no team and silently corrupt the bracket.
+    const winner = H.winner ? "HOME_TEAM" : A.winner ? "AWAY_TEAM"
+      : (state === "post" && stage === "GROUP_STAGE" ? "DRAW" : null);
     return {
       id: e.id, utcDate: e.date, status, stage, group, matchday,
       home: { tla: fd(htla), name: (H.team && H.team.displayName) || null },

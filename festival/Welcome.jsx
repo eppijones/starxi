@@ -874,6 +874,18 @@ function Welcome({ state, setState, onNext, onHistory }) {
         </div>
       )}
 
+      {/* Always-on trademark disclaimer (independent fan project). Sits flush at the
+          bottom edge, below the left-aligned nation caption, and never blocks taps. */}
+      <div style={{
+        position: "absolute", left: 0, right: 0,
+        bottom: "calc(4px + env(safe-area-inset-bottom, 0px))",
+        textAlign: "center", padding: "0 16px", zIndex: 40, pointerEvents: "none",
+        fontSize: 10, lineHeight: 1.3, fontWeight: 600, letterSpacing: "0.02em",
+        color: "rgba(255,255,255,0.5)"
+      }}>
+        Independent fan project · not affiliated with, endorsed by, or licensed by FIFA.
+      </div>
+
       <style>{`
         @keyframes livepulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
         @keyframes pickerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
