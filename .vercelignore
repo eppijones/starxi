@@ -13,6 +13,7 @@ MATCH_WATCH_REMOVAL.md
 backdrops/
 social/
 social-video/
+higgsfield-studio/
 
 # Config & lock files that aren't served
 skills-lock.json

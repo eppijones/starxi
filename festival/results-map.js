@@ -230,7 +230,7 @@
     var events = {};
     function ensure(id) {
       if (!events[id]) {
-        events[id] = { byMd: [0,1,2,3,4,5,6,7].map(function () { return { goals: 0, assists: 0, sheets: 0 }; }) };
+        events[id] = { byMd: [0,1,2,3,4,5,6,7].map(function () { return { goals: 0, assists: 0, sheets: 0, wins: 0, draws: 0 }; }) };
       }
       return events[id];
     }
@@ -288,6 +288,46 @@
         ensure(p.id).byMd[mdIdx].sheets += 1;
       });
     }
+
+    // ——— Result points (win/draw) — DELIVER the advertised "Win +3 / Draw +1" ———
+    // The Live rules panel has always promised every player on a winning nation +3
+    // (a draw +1), but the feed never carried it, so defenders/keepers scored 0 even
+    // when their team won. Derive each nation's result per matchday — group
+    // scorelines for MD1–3, knockout winners for the KO rounds — and credit it to
+    // EVERY pick of that nation. scoreEvents already turns wins/draws into flat
+    // (un-boosted) points, exactly as the rulebook states; this just feeds it the
+    // data it was missing. No point VALUES change — the published rules are unchanged.
+    var playersByNat = {};
+    PLAYERS.forEach(function (p) {
+      (playersByNat[ourCode(p.nat)] = playersByNat[ourCode(p.nat)] || []).push(p);
+    });
+    function creditResult(code, mdIdx, res) {
+      (playersByNat[ourCode(code)] || []).forEach(function (p) {
+        var line = ensure(p.id).byMd[mdIdx];
+        if (res === "W") line.wins += 1;
+        else if (res === "D") line.draws += 1;
+      });
+    }
+    // Group matchdays (index 0–2): win/draw from finished group scorelines.
+    (FIXTURES || []).forEach(function (fx) {
+      if (mapped.statusById[fx.id] !== "FINISHED") return;
+      var r = mapped.results[fx.id];
+      if (!r) return;
+      var mdIdx = (fx.matchday || 1) - 1;
+      if (r.home > r.away) creditResult(fx.home.code, mdIdx, "W");
+      else if (r.home < r.away) creditResult(fx.away.code, mdIdx, "W");
+      else { creditResult(fx.home.code, mdIdx, "D"); creditResult(fx.away.code, mdIdx, "D"); }
+    });
+    // Knockout matchdays (index 3–7): the winner advances → a "win" for their XI.
+    // KO ties are settled on penalties, so there is no draw to credit there.
+    ((payload && payload.matches) || []).forEach(function (m) {
+      var round = stageToRound(m.stage);
+      if (!round || round === "third") return;
+      if (m.status !== "FINISHED") return;
+      var w = m.score && m.score.winner;
+      var code = w === "HOME_TEAM" ? (m.home && m.home.tla) : (w === "AWAY_TEAM" ? (m.away && m.away.tla) : null);
+      if (code) creditResult(ourCode(code), ROUND_MD_INDEX[round], "W");
+    });
 
     return events;
   }
