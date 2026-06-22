@@ -115,7 +115,10 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
         if (nextPicks.length >= 11) return s;
         nextPicks = [...nextPicks, p.id];
       }
-      return { ...s, picks: nextPicks, captain: nextCap, captainByMd: nextCapByMd };
+      // Keep captainPlus in lockstep with whether any per-MW armband survives —
+      // dropping the last captained pick must clear the flag too.
+      const captainPlus = [1, 2, 3].some(md => nextCapByMd[md]);
+      return { ...s, picks: nextPicks, captain: nextCap, captainByMd: nextCapByMd, captainPlus };
     });
   };
 
@@ -129,20 +132,26 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
       const inMd = [1, 2, 3].find(md => cur[md] === id);
       if (inMd) {
         [1, 2, 3].forEach(md => { if (cur[md] === id) delete cur[md]; });
-        return { ...s, captainByMd: cur };
+      } else {
+        const emptyMd = [1, 2, 3].find(md => !cur[md]);
+        if (!emptyMd) return s;
+        cur[emptyMd] = id;
       }
-      const emptyMd = [1, 2, 3].find(md => !cur[md]);
-      if (!emptyMd) return s;
-      cur[emptyMd] = id;
-      return { ...s, captainByMd: cur };
+      // The ×2 armband is only honored at scoring time when captainPlus is on
+      // (scoring-core: captainForMd reads captainByMd iff captainPlus). This
+      // manual flow used to leave the flag off, silently dropping every captain
+      // point — so derive it from whether any armband is actually assigned.
+      const captainPlus = [1, 2, 3].some(md => cur[md]);
+      return { ...s, captainByMd: cur, captainPlus };
     });
   };
 
   const setCaptainForMd = (md, id) => {
-    setState(s => ({
-      ...s,
-      captainByMd: { ...(s.captainByMd || {}), [md]: id || null }
-    }));
+    setState(s => {
+      const captainByMd = { ...(s.captainByMd || {}), [md]: id || null };
+      const captainPlus = [1, 2, 3].some(m => captainByMd[m]);
+      return { ...s, captainByMd, captainPlus };
+    });
   };
 
   const setFormation = (f) => {
@@ -207,7 +216,7 @@ function DreamXI({ state, setState, onNext, onSkip, onBack }) {
 
   const clearXI = () => {
     if (!confirm("Clear your Star XI?")) return;
-    setState(s => ({ ...s, picks: [], captain: null, captainByMd: {} }));
+    setState(s => ({ ...s, picks: [], captain: null, captainByMd: {}, captainPlus: false }));
   };
 
   const pinned = window.FORMATIONS_PINNED || Object.keys(window.FORMATIONS).slice(0, 3);

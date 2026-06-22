@@ -213,7 +213,12 @@ module.exports = async (req, res) => {
       return json(res, 400, { ok: false, error: "incomplete_entry", message: "Lock-in needs a nation and exactly 11 players." });
     }
 
+    // Team name freezes at kickoff along with the prediction core (there is no
+    // in-tournament rename UI, so a post-kickoff client value can only be a
+    // stale localStorage echo — accepting it would let an old device revert an
+    // admin rename done directly in KV).
     const displayName =
+      (locked && existing && existing.displayName) ||
       (body.displayName && String(body.displayName).slice(0, 60)) ||
       (existing && existing.displayName) ||
       null;

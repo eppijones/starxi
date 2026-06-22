@@ -78,6 +78,25 @@ function entryToState(e) {
   };
 }
 
+// Stable fingerprint of the fields that drive the share card AND scoring (XI,
+// formation, captains, swaps, nation). Used to tell whether this device's local
+// draft has drifted from the authoritative server entry — captainByMd is
+// normalised to 1→3 order so a re-keyed-but-equal map doesn't read as a change.
+function teamSignature(s) {
+  s = s || {};
+  const cap = {};
+  [1, 2, 3].forEach((md) => { const v = (s.captainByMd || {})[md]; if (v) cap[md] = v; });
+  return JSON.stringify({
+    nation: s.nation || null,
+    picks: s.picks || [],
+    formation: s.formation || "4-3-3",
+    captain: s.captain || null,
+    captainPlus: !!s.captainPlus,
+    captainByMd: cap,
+    swaps: s.swaps || [],
+  });
+}
+
 // ——— Helpers used by the redesigned summary screen ———
 // Order picks into formation slots GK → DF → MF → FW so the numbered "Starting
 // XI" list reads like a real team sheet (1 = keeper, 2..5 = defence, etc.).
@@ -1143,9 +1162,29 @@ function App() {
     const myGen = ++reconcileGenRef.current;
 
     const localOwner = ownerRef.current || "anon"; // legacy/untagged drafts = anon
-    if (localOwner === idKey) { // already theirs — trust the local copy
+    if (localOwner === idKey) { // already theirs — trust the fast local copy…
       ownerRef.current = idKey;
-      // …but a returning, signed-in player with a locked-in team should see LIVE,
+      // …but the SERVER entry is authoritative for a locked-in team: it freezes
+      // at kickoff, and the only place a stale version survives is this device's
+      // localStorage. If the saved team has drifted from what's on screen — picks
+      // edited on another device, or a captain repaired straight in KV — adopt
+      // the server copy so the share card + live points match the leaderboard.
+      // A matching draft is left untouched (fast path, no re-render); a name-only
+      // drift (admin rename) still syncs just that field.
+      if (window.wcxiLoadEntry) {
+        window.wcxiLoadEntry().then((res) => {
+          if (myGen !== reconcileGenRef.current) return; // identity changed mid-flight
+          const e = res && res.entry;
+          if (!e) return;
+          const local = (latestRef.current && latestRef.current.state) || {};
+          if (teamSignature(entryToState(e)) !== teamSignature(local)) {
+            setState(entryToState(e));
+          } else if (e.displayName && e.displayName !== local.teamName) {
+            setState((s) => ({ ...s, teamName: e.displayName }));
+          }
+        });
+      }
+      // …and a returning, signed-in player with a locked-in team should see LIVE,
       // not be left sitting on the welcome carousel.
       if (latestRef.current && latestRef.current.state && latestRef.current.state.submitted && latestRef.current.step === "welcome") goTo("live");
       return;
